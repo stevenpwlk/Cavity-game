@@ -1,4 +1,5 @@
 /* CAVITÉ — Prototype P2 · run infini, difficulté progressive, 4 bassins, tirs signés
+   Passe visuelle : textures peintes au canvas, lumière, grain, caustiques, bloom/vignette.
    Design interne 780×1240 (unités = 2× la maquette), Scale.FIT portrait. */
 
 const W = 780, H = 1240;
@@ -46,7 +47,13 @@ class Main extends Phaser.Scene {
   create() {
     this.makeTextures();
     this.arenaGfx = this.add.graphics();
-    this.arenaGlow = null;
+
+    // décor d'ambiance : bokeh de tribune + lumière caustique + grain (créés une fois, alimentés/scrollés ensuite)
+    this.bokehLayer = this.add.container();
+    this.caustic1 = this.add.tileSprite(0, SURF, W, H - SURF, 'causticTile')
+      .setOrigin(0, 0).setBlendMode(Phaser.BlendModes.ADD).setAlpha(.10);
+    this.caustic2 = this.add.tileSprite(0, SURF, W, H - SURF, 'causticTile')
+      .setOrigin(0, 0).setBlendMode(Phaser.BlendModes.ADD).setAlpha(.06).setTileScale(1.4, 1.4);
 
     // ─── raquette-cible ───
     this.cavBase = 38;
@@ -61,29 +68,23 @@ class Main extends Phaser.Scene {
 
     // ─── tireur ───
     this.swimmer = this.add.container(170, 848);
+    this.swimmer.add(this.add.image(0, 16, 'shadowSoft').setScale(.5, .32).setAlpha(.28));
     this.buildSwimmer();
     this.tweens.add({ targets: this.swimmer, y: '+=10', duration: 3000, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     // ─── balle ───
     this.ballHome = { x: 268, y: 810 };
     this.ball = this.add.container(this.ballHome.x, this.ballHome.y);
-    const bg = this.add.graphics();
-    bg.fillStyle(0xefe6cf, 1); bg.fillCircle(0, 0, 22);
-    bg.lineStyle(3, 0xc9b98b, 1);
-    bg.beginPath(); bg.arc(0, -7, 20, Math.PI * 0.15, Math.PI * 0.85, false); bg.strokePath();
-    bg.beginPath(); bg.arc(0, 7, 20, Math.PI * 1.15, Math.PI * 1.85, false); bg.strokePath();
-    bg.lineStyle(3, 0xfffbe9, .8);
-    bg.beginPath(); bg.arc(-2, -2, 15, Math.PI * 1.05, Math.PI * 1.45, false); bg.strokePath();
-    this.ball.add(bg);
+    this.ball.add(this.add.image(0, 0, 'ballTex').setDisplaySize(44, 44));
     this.ballGlow = this.add.image(this.ball.x, this.ball.y, 'glow').setScale(.9).setTint(0xbfe0ff).setAlpha(.18).setBlendMode(Phaser.BlendModes.ADD);
 
     this.trail = this.add.particles(0, 0, 'bubble', {
       speed: { min: 8, max: 30 }, angle: { min: 250, max: 290 },
-      scale: { start: .5, end: .1 }, alpha: { start: .5, end: 0 },
+      scale: { start: .55, end: .15 }, alpha: { start: .6, end: 0 },
       lifespan: 900, frequency: -1,
     });
     this.burst = this.add.particles(0, 0, 'gold', {
-      speed: { min: 60, max: 320 }, scale: { start: .9, end: 0 },
+      speed: { min: 60, max: 320 }, scale: { start: 1, end: 0 },
       alpha: { start: 1, end: 0 }, lifespan: 700, frequency: -1,
       blendMode: Phaser.BlendModes.ADD,
     });
@@ -105,6 +106,18 @@ class Main extends Phaser.Scene {
       y: 220 + (i * 67) % 880, off: (i * 173) % 780, len: 26 + (i * 31) % 40,
     }));
     this.flowX = 0;
+
+    // grain de film — tout en haut de la pile, unifie l'image
+    this.grain = this.add.tileSprite(0, 0, W, H, 'grainTile').setOrigin(0, 0).setAlpha(.035);
+
+    // lumière : vignette + bloom sur les points chauds (dégradation silencieuse si WebGL indisponible)
+    try {
+      if (this.sys.game.renderer.type === Phaser.WEBGL) {
+        this.cameras.main.postFX.addVignette(0.5, 0.5, 0.78, 0.35);
+        this.cavGlow.postFX.addBloom(0xe8c766, 1, 1, 1.3, 1.2, 6);
+        this.ballGlow.postFX.addBloom(0xbfe0ff, 1, 1, 1.1, 1, 6);
+      }
+    } catch (e) { /* rendu Canvas (headless/sans GPU) : on continue sans postFX */ }
 
     // ─── input ───
     this.input.on('pointerdown', p => {
@@ -230,24 +243,143 @@ class Main extends Phaser.Scene {
     return Phaser.Math.Clamp(1 - Math.max(0, this.readyT - 4) * .15, .4, 1);
   }
 
-  // ───────────────────────── textures ─────────────────────────
+  // ───────────────────────── textures peintes ─────────────────────────
   makeTextures() {
+    // poussière en suspension
     let g = this.make.graphics({ add: false });
     g.fillStyle(0xffffff, 1); g.fillCircle(4, 4, 4);
     g.generateTexture('dot', 8, 8); g.destroy();
-    g = this.make.graphics({ add: false });
-    g.fillStyle(0xe8c766, 1); g.fillCircle(5, 5, 5);
-    g.generateTexture('gold', 10, 10); g.destroy();
-    g = this.make.graphics({ add: false });
-    g.lineStyle(2, 0xdbe9f8, 1); g.strokeCircle(6, 6, 5);
-    g.generateTexture('bubble', 12, 12); g.destroy();
-    const c = this.textures.createCanvas('glow', 128, 128);
-    const ctx = c.getContext();
-    const rg = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+
+    let c, ctx;
+
+    // étincelle dorée (halo chaud)
+    c = this.textures.createCanvas('gold', 20, 20);
+    ctx = c.getContext();
+    let rg = ctx.createRadialGradient(10, 10, 0, 10, 10, 10);
+    rg.addColorStop(0, 'rgba(255,250,222,1)');
+    rg.addColorStop(.35, 'rgba(232,199,102,1)');
+    rg.addColorStop(1, 'rgba(232,199,102,0)');
+    ctx.fillStyle = rg; ctx.fillRect(0, 0, 20, 20);
+    c.refresh();
+
+    // bulle : anneau fin + reflet
+    c = this.textures.createCanvas('bubble', 16, 16);
+    ctx = c.getContext();
+    ctx.strokeStyle = 'rgba(219,233,248,.9)'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.arc(8, 8, 6, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.7)';
+    ctx.beginPath(); ctx.arc(5.6, 5.6, 1.3, 0, Math.PI * 2); ctx.fill();
+    c.refresh();
+
+    // halo générique (réutilisé, teinté à la volée)
+    c = this.textures.createCanvas('glow', 128, 128);
+    ctx = c.getContext();
+    rg = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
     rg.addColorStop(0, 'rgba(255,255,255,1)');
     rg.addColorStop(.4, 'rgba(255,255,255,.35)');
     rg.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = rg; ctx.fillRect(0, 0, 128, 128);
+    c.refresh();
+
+    // ombre douce (ancrage visuel des objets flottants)
+    c = this.textures.createCanvas('shadowSoft', 160, 90);
+    ctx = c.getContext();
+    rg = ctx.createRadialGradient(80, 45, 0, 80, 45, 80);
+    rg.addColorStop(0, 'rgba(2,6,14,.55)');
+    rg.addColorStop(1, 'rgba(2,6,14,0)');
+    ctx.fillStyle = rg; ctx.fillRect(0, 0, 160, 90);
+    c.refresh();
+
+    // balle : sphère peinte, coutures et reflet
+    c = this.textures.createCanvas('ballTex', 96, 96);
+    ctx = c.getContext();
+    let bg2 = ctx.createRadialGradient(34, 30, 4, 48, 48, 46);
+    bg2.addColorStop(0, '#fbf3dd'); bg2.addColorStop(.55, '#efe0bd'); bg2.addColorStop(1, '#c8a86f');
+    ctx.fillStyle = bg2;
+    ctx.beginPath(); ctx.arc(48, 48, 42, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(160,131,79,.55)'; ctx.lineWidth = 2.8;
+    ctx.beginPath(); ctx.moveTo(8, 36); ctx.quadraticCurveTo(48, 62, 88, 36); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(8, 58); ctx.quadraticCurveTo(48, 32, 88, 58); ctx.stroke();
+    const rim2 = ctx.createRadialGradient(48, 48, 32, 48, 48, 46);
+    rim2.addColorStop(0, 'rgba(90,66,28,0)'); rim2.addColorStop(1, 'rgba(60,44,20,.42)');
+    ctx.fillStyle = rim2;
+    ctx.beginPath(); ctx.arc(48, 48, 42, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.55)';
+    ctx.beginPath(); ctx.ellipse(32, 26, 12, 7.5, -0.5, 0, Math.PI * 2); ctx.fill();
+    c.refresh();
+
+    // raquette : ombre, manche bois, anneau métallique, cordage, sceau — texture unique
+    const RW = 200, RH = 320, RX = 100, RY = 114;
+    c = this.textures.createCanvas('racketTex', RW, RH);
+    ctx = c.getContext();
+    let rs = ctx.createRadialGradient(RX + 6, RY + 18, 10, RX + 6, RY + 18, 98);
+    rs.addColorStop(0, 'rgba(2,6,14,.32)'); rs.addColorStop(1, 'rgba(2,6,14,0)');
+    ctx.fillStyle = rs;
+    ctx.beginPath(); ctx.ellipse(RX + 6, RY + 18, 98, 110, 0, 0, Math.PI * 2); ctx.fill();
+    const hg = ctx.createLinearGradient(RX - 11, 0, RX + 11, 0);
+    hg.addColorStop(0, '#5f3f22'); hg.addColorStop(.45, '#b98b5e'); hg.addColorStop(1, '#6d4626');
+    ctx.fillStyle = hg;
+    ctx.beginPath();
+    ctx.moveTo(RX - 11, RY + 86); ctx.lineTo(RX - 11, RY + 180);
+    ctx.quadraticCurveTo(RX - 11, RY + 190, RX - 1, RY + 190);
+    ctx.lineTo(RX + 1, RY + 190); ctx.quadraticCurveTo(RX + 11, RY + 190, RX + 11, RY + 180);
+    ctx.lineTo(RX + 11, RY + 86); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(50,32,16,.5)'; ctx.lineWidth = 1.4;
+    for (let y = RY + 104; y <= RY + 176; y += 18) {
+      ctx.beginPath(); ctx.moveTo(RX - 11, y); ctx.lineTo(RX + 11, y + 4); ctx.stroke();
+    }
+    const fg = ctx.createLinearGradient(RX - 82, RY - 96, RX + 82, RY + 96);
+    fg.addColorStop(0, '#f4f8fc'); fg.addColorStop(.35, '#aebdd0'); fg.addColorStop(.65, '#66788f'); fg.addColorStop(1, '#cbd6e4');
+    ctx.lineWidth = 11; ctx.strokeStyle = fg;
+    ctx.beginPath(); ctx.ellipse(RX, RY, 82, 96, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 2.2; ctx.strokeStyle = 'rgba(102,120,143,.55)';
+    ctx.beginPath(); ctx.ellipse(RX, RY, 72, 86, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 3.4; ctx.strokeStyle = 'rgba(238,245,255,.75)';
+    ctx.beginPath(); ctx.ellipse(RX, RY, 82, 96, 0, Math.PI * 1.05, Math.PI * 1.5); ctx.stroke();
+    ctx.strokeStyle = 'rgba(169,188,210,.5)'; ctx.lineWidth = 1;
+    for (let x = -64; x <= 64; x += 16) {
+      const half = Math.sqrt(Math.max(0, 1 - (x / 70) ** 2)) * 84;
+      ctx.beginPath(); ctx.moveTo(RX + x, RY - half); ctx.lineTo(RX + x, RY + half); ctx.stroke();
+    }
+    for (let y = -72; y <= 72; y += 16) {
+      const half = Math.sqrt(Math.max(0, 1 - (y / 86) ** 2)) * 70;
+      ctx.beginPath(); ctx.moveTo(RX - half, RY + y); ctx.lineTo(RX + half, RY + y); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(238,245,255,.1)'; ctx.lineWidth = .6;
+    ctx.beginPath(); ctx.moveTo(RX - 60, RY - 40); ctx.lineTo(RX + 60, RY + 40); ctx.stroke();
+    const sg = ctx.createRadialGradient(RX + 20, RY + 94, 1, RX + 20, RY + 94, 9);
+    sg.addColorStop(0, '#f7e4a3'); sg.addColorStop(1, '#a8862f');
+    ctx.fillStyle = sg;
+    ctx.beginPath(); ctx.arc(RX + 20, RY + 94, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.lineWidth = 1.3; ctx.strokeStyle = '#7a5f1f'; ctx.stroke();
+    c.refresh();
+    this.racketOrigin = { x: RX / RW, y: RY / RH };
+
+    // grain de film — bruit discret qui unifie l'image
+    c = this.textures.createCanvas('grainTile', 128, 128);
+    ctx = c.getContext();
+    const img = ctx.createImageData(128, 128);
+    for (let i = 0; i < img.data.length; i += 4) {
+      img.data[i] = 255; img.data[i + 1] = 255; img.data[i + 2] = 255;
+      img.data[i + 3] = Math.random() * 40;
+    }
+    ctx.putImageData(img, 0, 0);
+    c.refresh();
+
+    // caustiques — champ de lumière tuilable sans couture (blobs répétés aux bords)
+    c = this.textures.createCanvas('causticTile', 256, 256);
+    ctx = c.getContext();
+    const cr = new Phaser.Math.RandomDataGenerator(['caustics']);
+    for (let i = 0; i < 14; i++) {
+      const x = cr.between(0, 256), y = cr.between(0, 256), r = cr.between(20, 46);
+      for (const ox of [-256, 0, 256]) for (const oy of [-256, 0, 256]) {
+        const grad = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
+        grad.addColorStop(0, 'rgba(207,230,255,.9)');
+        grad.addColorStop(1, 'rgba(207,230,255,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.arc(x + ox, y + oy, r, 0, Math.PI * 2); ctx.fill();
+      }
+    }
     c.refresh();
   }
 
@@ -258,18 +390,30 @@ class Main extends Phaser.Scene {
     g.fillStyle(v.sky, 1); g.fillRect(0, 0, W, SURF);
     g.fillStyle(0x060f20, 1); this.band(g, 40, 96);
     g.fillStyle(0x081426, 1); this.band(g, 92, 132);
+
+    // bokeh de tribune : sprites lumineux doux (remplace les pastilles plates)
+    this.bokehLayer.removeAll(true);
     const rnd = new Phaser.Math.RandomDataGenerator(['fist' + v.decor]);
     const cols = [0xe4c05c, 0xe9f1fb, 0x4fa3d8, 0xc8563b];
-    for (let i = 0; i < 42; i++) {
-      g.fillStyle(rnd.pick(cols), rnd.realInRange(.25, .6));
-      g.fillCircle(rnd.between(10, W - 10), rnd.between(48, 124), rnd.realInRange(1.6, 3.2));
+    for (let i = 0; i < 34; i++) {
+      const img = this.add.image(rnd.between(10, W - 10), rnd.between(46, 128), 'glow')
+        .setTint(rnd.pick(cols)).setBlendMode(Phaser.BlendModes.ADD)
+        .setAlpha(rnd.realInRange(.35, .8)).setScale(rnd.realInRange(.05, .11));
+      this.bokehLayer.add(img);
     }
+
     for (const mx of [120, 660]) {
       g.fillStyle(0x040b18, 1);
       g.fillRect(mx - 3, 24, 6, SURF - 24);
       g.fillRoundedRect(mx - 24, 14, 48, 14, 6);
       g.fillStyle(0xffe9ad, 1);
       for (const dx of [-13, 0, 13]) g.fillCircle(mx + dx, 21, 4);
+      // faisceau du projecteur (deux passes pour un faux flou)
+      const dir = mx < W / 2 ? 1 : -1;
+      g.fillStyle(0xdceeff, .04);
+      g.fillTriangle(mx - 26, 30, mx + 26, 30, mx + dir * 170, H * .55);
+      g.fillStyle(0xdceeff, .08);
+      g.fillTriangle(mx - 15, 30, mx + 15, 30, mx + dir * 150, H * .55);
     }
     g.fillGradientStyle(v.top, v.top, v.bot, v.bot, 1);
     g.fillRect(0, SURF, W, H - SURF);
@@ -324,39 +468,17 @@ class Main extends Phaser.Scene {
 
   // ───────────────────────── acteurs ─────────────────────────
   buildRacket() {
-    const r = this.add.graphics();
-    r.fillStyle(0x8f6238, 1); r.fillRoundedRect(-11, 86, 22, 104, 10);
-    r.fillStyle(0xb98b5e, 1); r.fillRoundedRect(-11, 86, 22, 52, 10);
-    r.lineStyle(2, 0x5f3f26, .7);
-    for (let y = 104; y <= 176; y += 18) { r.beginPath(); r.moveTo(-11, y); r.lineTo(11, y + 4); r.strokePath(); }
-    r.fillStyle(0x040c1a, .3); r.fillEllipse(0, 0, 164, 192);
-    r.lineStyle(9, 0xcbd6e4, 1); r.strokeEllipse(0, 0, 164, 192);
-    r.lineStyle(2, 0x7e93ac, .7); r.strokeEllipse(0, 0, 144, 172);
-    r.lineStyle(1.2, 0xa9bcd2, .5);
-    for (let x = -64; x <= 64; x += 16) {
-      const half = Math.sqrt(Math.max(0, 1 - (x / 70) ** 2)) * 84;
-      r.beginPath(); r.moveTo(x, -half); r.lineTo(x, half); r.strokePath();
-    }
-    for (let y = -72; y <= 72; y += 16) {
-      const half = Math.sqrt(Math.max(0, 1 - (y / 86) ** 2)) * 70;
-      r.beginPath(); r.moveTo(-half, y); r.lineTo(half, y); r.strokePath();
-    }
-    r.lineStyle(3, 0xeef5ff, .6);
-    r.beginPath(); r.arc(0, 0, 88, Math.PI * 1.05, Math.PI * 1.5, false); r.strokePath();
-    this.racket.add(r);
-    this.racket.rotation = -0.14;
+    const frame = this.add.image(0, 0, 'racketTex').setOrigin(this.racketOrigin.x, this.racketOrigin.y);
+    this.racket.add(frame);
     this.cavity = this.add.container(-12, -16);
     this.cavGlow = this.add.image(0, 0, 'glow').setScale(1.5).setTint(0xe8c766).setAlpha(.5).setBlendMode(Phaser.BlendModes.ADD);
     const hole = this.add.graphics();
     hole.fillStyle(0x020a16, 1); hole.fillCircle(0, 0, this.cavBase);
     hole.lineStyle(7, 0xe8c766, 1); hole.strokeCircle(0, 0, this.cavBase);
+    hole.lineStyle(2, 0xfff3c9, .75); hole.strokeCircle(0, 0, this.cavBase - 4);
     this.cavity.add([this.cavGlow, hole]);
     this.racket.add(this.cavity);
     this.tweens.add({ targets: this.cavGlow, alpha: .25, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    const seal = this.add.graphics();
-    seal.fillStyle(0xe4c05c, 1); seal.fillCircle(20, 94, 8);
-    seal.lineStyle(2, 0xa8862f, 1); seal.strokeCircle(20, 94, 8);
-    this.racket.add(seal);
   }
 
   buildShark() {
@@ -471,6 +593,12 @@ class Main extends Phaser.Scene {
         $('modif').textContent = 'L’ANCHOSIFFLE S’IMPATIENTE — LE POTENTIEL FOND';
       }
     }
+
+    // caustiques : scintillement lent, deux couches à vitesses différentes
+    this.caustic1.tilePositionX += dt * 10;
+    this.caustic1.tilePositionY += dt * 4;
+    this.caustic2.tilePositionX -= dt * 6;
+    this.caustic2.tilePositionY += dt * 7;
 
     // filets de courant visibles (dérivent à la vitesse réelle du courant, turbulence comprise)
     const curNow = this.stateName === 'flying' ? this.currentNow()
@@ -675,7 +803,7 @@ class Main extends Phaser.Scene {
 }
 
 new Phaser.Game({
-  type: Phaser.AUTO,
+  type: location.search.includes('canvas') ? Phaser.CANVAS : Phaser.AUTO,
   parent: 'game',
   backgroundColor: '#050e1e',
   width: W,

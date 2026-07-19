@@ -49,6 +49,18 @@
   }
   .num { font-variant-numeric: tabular-nums; }
 
+  .topPanel {
+    position: relative;
+    background:
+      linear-gradient(180deg, rgba(10,22,44,.92), rgba(6,14,30,.75) 70%, transparent);
+    padding-bottom: 6px;
+  }
+  .topPanel::after {
+    content: '';
+    position: absolute; left: 16px; right: 16px; bottom: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(174,189,208,.28), transparent);
+  }
   .hud {
     display: flex;
     align-items: center;
@@ -58,7 +70,10 @@
   }
   .hud .tag { font-size: 9px; letter-spacing: .22em; color: var(--argent-sombre); }
   .hud-score { text-align: center; }
-  .hud-score .v { font-size: 24px; font-weight: 700; letter-spacing: .04em; }
+  .hud-score .v {
+    font-size: 25px; font-weight: 700; letter-spacing: .04em;
+    text-shadow: 0 0 18px rgba(191,224,255,.28);
+  }
   .hud-score .l { font-size: 9px; letter-spacing: .24em; color: var(--argent-sombre); }
   .serie-chip {
     font-size: 11px; font-weight: 700; letter-spacing: .1em;
@@ -67,13 +82,24 @@
     border-radius: 99px;
     padding: 5px 10px;
     opacity: .35;
-    transition: opacity .3s, transform .3s;
+    background: rgba(228,192,92,.06);
+    transition: opacity .3s, transform .3s, box-shadow .3s;
   }
-  .serie-chip.on { opacity: 1; }
+  .serie-chip.on { opacity: 1; box-shadow: 0 0 16px rgba(228,192,92,.22); }
   .serie-chip.pop { transform: scale(1.18); }
-  .balles { display: flex; gap: 6px; justify-content: center; padding: 6px 0 4px; }
-  .balles i { width: 8px; height: 8px; border-radius: 50%; background: var(--ecume); }
-  .balles i.off { background: transparent; border: 1px solid var(--argent-sombre); }
+  .balles { display: flex; gap: 8px; justify-content: center; padding: 7px 0 5px; }
+  .balles i {
+    width: 9px; height: 9px;
+    background: var(--ecume);
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    box-shadow: 0 0 6px rgba(233,241,251,.5);
+  }
+  .balles i.off {
+    background: transparent;
+    border: 1px solid var(--argent-sombre);
+    box-shadow: none;
+  }
   .fiche {
     display: flex; justify-content: center; gap: 12px;
     padding: 2px 12px 8px;
@@ -88,6 +114,7 @@
     font-size: 9px; letter-spacing: .16em; text-transform: uppercase;
     color: var(--or);
     border: 1px solid rgba(228,192,92,.45);
+    background: rgba(228,192,92,.05);
     border-radius: 99px;
     padding: 4px 12px;
     transition: opacity .3s;
@@ -117,8 +144,12 @@
     transform: rotate(-4deg);
     background: rgba(5,14,30,.55);
     backdrop-filter: blur(2px);
+    box-shadow: 0 0 32px rgba(228,192,92,.25), inset 0 0 14px rgba(228,192,92,.08);
   }
-  .stamp.miss { color: var(--argent); border-color: var(--argent); font-size: 22px; }
+  .stamp.miss {
+    color: var(--argent); border-color: var(--argent); font-size: 22px;
+    box-shadow: 0 0 26px rgba(174,189,208,.18), inset 0 0 14px rgba(174,189,208,.06);
+  }
   .stamp-layer.show .stamp { animation: slam .4s cubic-bezier(.2, 2.4, .5, 1) both; }
   @keyframes slam { from { transform: rotate(-4deg) scale(2.2); opacity: 0; } }
   .stamp-pts { font-size: 20px; font-weight: 700; color: var(--ecume); letter-spacing: .1em; }
@@ -138,8 +169,16 @@
   .end-layer.show { display: flex; }
   .end-layer .eyebrow { font-size: 10px; letter-spacing: .24em; color: var(--argent-sombre); }
   .end-layer h2 { font-size: 22px; letter-spacing: .1em; }
-  .end-layer .big { font-size: 46px; font-weight: 700; }
-  .end-layer .sub { font-size: 12px; color: var(--argent); max-width: 30ch; line-height: 1.6; font-family: 'Segoe UI', system-ui, sans-serif; }
+  .end-layer .big {
+    font-size: 46px; font-weight: 700;
+    text-shadow: 0 0 26px rgba(191,224,255,.3);
+  }
+  .end-layer .sub {
+    font-size: 12px; color: var(--argent); max-width: 30ch; line-height: 1.6;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    border-top: 1px solid var(--ligne);
+    padding-top: 14px;
+  }
   .btn {
     font-family: var(--sg);
     font-size: 14px; font-weight: 700; letter-spacing: .12em;
@@ -148,7 +187,10 @@
     border: none; cursor: pointer;
     color: #131c2c;
     background: linear-gradient(180deg, #efd07a, var(--or));
+    box-shadow: 0 8px 26px rgba(228,192,92,.25);
+    transition: transform .15s ease;
   }
+  .btn:active { transform: scale(.97); }
 
   .hint {
     position: absolute; left: 16px; bottom: 14px;
@@ -178,21 +220,23 @@
 </head>
 <body>
 <div class="phone">
-  <div class="hud">
-    <span class="tag">F.I.S.T.</span>
-    <div class="hud-score">
-      <div class="v num" id="score">0</div>
-      <div class="l">POINTS</div>
+  <div class="topPanel">
+    <div class="hud">
+      <span class="tag">F.I.S.T.</span>
+      <div class="hud-score">
+        <div class="v num" id="score">0</div>
+        <div class="l">POINTS</div>
+      </div>
+      <span class="serie-chip" id="serie">SÉRIE ×1</span>
     </div>
-    <span class="serie-chip" id="serie">SÉRIE ×1</span>
+    <div class="balles" id="balles" title="Balles restantes"></div>
+    <div class="fiche">
+      <span>TIR <b class="num" id="ballNo">1</b></span><span>·</span>
+      <span>COTE <span class="star" id="stars">★☆☆☆☆</span></span><span>·</span>
+      <span>POTENTIEL <b class="num" id="pot">—</b></span>
+    </div>
+    <div class="modif-pill" id="modif">PREMIER TIR — RAQUETTE FIXE</div>
   </div>
-  <div class="balles" id="balles" title="Balles restantes"></div>
-  <div class="fiche">
-    <span>TIR <b class="num" id="ballNo">1</b></span><span>·</span>
-    <span>COTE <span class="star" id="stars">★☆☆☆☆</span></span><span>·</span>
-    <span>POTENTIEL <b class="num" id="pot">—</b></span>
-  </div>
-  <div class="modif-pill" id="modif">PREMIER TIR — RAQUETTE FIXE</div>
 
   <div id="game">
     <div class="venue-tag">
