@@ -19,15 +19,15 @@ const ROMAIN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 // annonces : la nouveauté du tir (une seule à la fois)
 const MILESTONES = {
   1: 'PREMIER TIR — RAQUETTE FIXE',
-  2: 'LA CAVITÉ SE DÉPLACE SUR LE TAMIS',
-  3: 'COURANT ACTIF — LIS LES PARTICULES',
-  4: 'LA RAQUETTE DÉRIVE',
+  2: 'COURANT ACTIF — L’APERÇU NE LE COMPENSE PAS',
+  3: 'LA RAQUETTE DÉRIVE',
+  4: 'LA CAVITÉ SE RESSERRE',
   6: 'PALIER II — LA FOSSE PAPRIKÉE',
-  8: 'LE COURANT CHANGE DE SENS',
-  9: 'REQUINS-MARTEAUX EN TRANSIT',
+  7: 'LE COURANT PEUT CHANGER DE SENS',
+  8: 'REQUINS-MARTEAUX EN TRANSIT',
+  9: 'COURANT TURBULENT PENDANT LE VOL',
   11: 'PALIER III — DELPHES-SUR-MER',
-  12: 'COURANT TURBULENT PENDANT LE VOL',
-  13: 'UN BANC D’ANCHOIS MASQUE LA VUE',
+  12: 'UN BANC D’ANCHOIS MASQUE LA VUE',
   16: 'PALIER IV — LE COULOIR DES REQUINS',
 };
 
@@ -95,10 +95,16 @@ class Main extends Phaser.Scene {
     });
 
     this.waveGfx = this.add.graphics();
+    this.flowGfx = this.add.graphics();
     this.ghostGfx = this.add.graphics();
     this.aimGfx = this.add.graphics();
     this.spinGfx = this.add.graphics();
     this.spinA = 0;
+    // filets de courant : traits qui dérivent à la vitesse du courant réel
+    this.flowSeeds = Array.from({ length: 14 }, (_, i) => ({
+      y: 220 + (i * 67) % 880, off: (i * 173) % 780, len: 26 + (i * 31) % 40,
+    }));
+    this.flowX = 0;
 
     // ─── input ───
     this.input.on('pointerdown', p => {
@@ -136,21 +142,25 @@ class Main extends Phaser.Scene {
     return {
       n, bassin, cycle,
       signe: n % 5 === 0,
-      cavScale: Math.max(.5, 1 - .028 * k),
-      driftAmp: n < 4 ? 0 : Math.min(170, 26 * (k - 2)),
-      driftDur: Math.max(1100, 3200 - 120 * k),
-      oscAmp: 14 + Math.min(80, 8 * k),
-      curBase: n < 3 ? 0 : Math.min(180, 34 + 15 * (k - 2)),
-      curDir: n >= 8 ? (r() < .5 ? 1 : -1) : 1,
+      cavScale: Math.max(.45, 1 - .04 * k),
+      driftAmp: n < 3 ? 0 : Math.min(190, 34 * (k - 1)),
+      driftDur: Math.max(900, 2800 - 140 * k),
+      oscAmp: 16 + Math.min(110, 12 * k),
+      curBase: n < 2 ? 0 : Math.min(200, 50 + 18 * (k - 1)),
+      curDir: n >= 7 ? (r() < .5 ? 1 : -1) : 1,
       curPhase: r() * Math.PI * 2,
-      turb: n >= 12,
-      shark: n >= 9,
-      anchois: n >= 13,
-      rx: 560 + Math.floor(r() * 90),
-      ry: 400 + Math.floor(r() * 220),
+      turb: n >= 9,
+      shark: n >= 8,
+      anchois: n >= 12,
+      rx: 540 + Math.floor(r() * 120),
+      ry: 380 + Math.floor(r() * 280),
+      rAngle: -8 + Math.floor(r() * 29) - 14,
       cavOx: -32 + Math.floor(r() * 64),
       cavOy: -36 + Math.floor(r() * 44),
+      bx: 220 + Math.floor(r() * 90),
+      by: 700 + Math.floor(r() * 200),
       stars: Math.min(5, 1 + Math.floor(k / 3)),
+      potBase: 400 + 40 * n,
     };
   }
 
@@ -171,12 +181,15 @@ class Main extends Phaser.Scene {
       $('venueP').textContent = `PALIER ${ROMAIN[Math.floor((d.n - 1) / 5)] || '?'}`;
       $('venueN').textContent = VENUES[d.bassin].nom + (d.cycle ? ` · CYCLE ${ROMAIN[d.cycle]}` : '');
     }
-    // raquette : position, cavité, mouvements
+    // position de tir : le tireur change de poste à chaque balle
+    this.ballHome = { x: d.bx, y: d.by };
+    this.tweens.add({ targets: this.swimmer, x: d.bx - 98, y: d.by + 38, duration: 450, ease: 'Sine.easeInOut' });
+    // raquette : position, angle, cavité, mouvements
     this.tweens.killTweensOf(this.racket);
-    this.racket.angle = -8;
+    this.racket.angle = d.rAngle;
     this.tweens.add({ targets: this.racket, x: d.rx, y: d.ry, duration: 550, ease: 'Sine.easeInOut' });
-    this.bobT = this.tweens.add({ targets: this.racket, y: d.ry + d.oscAmp, angle: -6,
-      duration: 2400 - Math.min(1200, d.n * 60), yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 560 });
+    this.bobT = this.tweens.add({ targets: this.racket, y: d.ry + d.oscAmp, angle: d.rAngle + 3,
+      duration: 2400 - Math.min(1400, d.n * 70), yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 560 });
     if (d.driftAmp > 0) {
       this.driftT = this.tweens.add({ targets: this.racket, x: d.rx - d.driftAmp,
         duration: d.driftDur, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: 560 });
@@ -202,11 +215,19 @@ class Main extends Phaser.Scene {
       this.anchois.setPosition(430, 380 + this.rng() * 260);
       this.tweens.add({ targets: this.anchois, x: 320, duration: 2400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     } else this.anchois.setPosition(-500, 500);
-    // HUD
-    $('modif').textContent = this.pill(d);
+    // HUD + pression temporelle (le potentiel fond après 4 s)
+    this.basePill = this.pill(d);
+    this.impatient = false;
+    this.readyT = 0;
+    $('modif').textContent = this.basePill;
     $('ballNo').textContent = this.tir;
     $('stars').textContent = '★'.repeat(d.stars) + '☆'.repeat(5 - d.stars);
+    $('pot').textContent = (d.potBase * (d.signe ? 3 : 1)).toLocaleString('fr-FR');
     this.refreshHud();
+  }
+
+  potFactor() {
+    return Phaser.Math.Clamp(1 - Math.max(0, this.readyT - 4) * .15, .4, 1);
   }
 
   // ───────────────────────── textures ─────────────────────────
@@ -398,6 +419,7 @@ class Main extends Phaser.Scene {
     const sp = Math.min(len * LAUNCH_K, SPEED_MAX);
     this.vel = { x: dx / len * sp, y: dy / len * sp };
     this.stateName = 'flying';
+    this.launchFactor = this.potFactor();
     this.flyT = 0;
     this.minD = 9999;
     this.bounced = false;
@@ -438,6 +460,34 @@ class Main extends Phaser.Scene {
   update(_, dms) {
     if (!this.mod) return;
     const dt = Math.min(dms / 1000, 0.033);
+
+    // pression temporelle : le potentiel fond quand on attend
+    if (this.stateName === 'ready' || this.stateName === 'aiming') {
+      this.readyT += dt;
+      const f = this.potFactor();
+      $('pot').textContent = Math.round(this.mod.potBase * f * (this.mod.signe ? 3 : 1)).toLocaleString('fr-FR');
+      if (f < 1 && !this.impatient) {
+        this.impatient = true;
+        $('modif').textContent = 'L’ANCHOSIFFLE S’IMPATIENTE — LE POTENTIEL FOND';
+      }
+    }
+
+    // filets de courant visibles (dérivent à la vitesse réelle du courant, turbulence comprise)
+    const curNow = this.stateName === 'flying' ? this.currentNow()
+      : this.mod.curBase * this.mod.curDir * (this.mod.turb ? (0.5 + Math.sin((this.waveT || 0) * 2.6 + this.mod.curPhase)) : 1);
+    this.flowX += curNow * dt * .9;
+    this.flowGfx.clear();
+    if (this.mod.curBase) {
+      this.flowGfx.lineStyle(2, 0x9fc8ee, .14);
+      for (const s of this.flowSeeds) {
+        const x = ((s.off + this.flowX) % (W + 120) + (W + 120)) % (W + 120) - 60;
+        this.flowGfx.beginPath();
+        this.flowGfx.moveTo(x, s.y);
+        this.flowGfx.lineTo(x + s.len * Math.sign(curNow || 1), s.y);
+        this.flowGfx.strokePath();
+      }
+    }
+
     this.waveT = (this.waveT || 0) + dt;
     this.waveGfx.clear();
     this.waveGfx.lineStyle(3, 0xe6f1fc, .8);
@@ -538,12 +588,12 @@ class Main extends Phaser.Scene {
     const sp = Math.min(len * LAUNCH_K, SPEED_MAX);
     const p = { x: this.ball.x, y: this.ball.y };
     const v = { x: dx / len * sp, y: dy / len * sp };
+    // aperçu EN EAU CALME (le courant n'est pas compensé : c'est au joueur de le lire), très tronqué
     g.fillStyle(0xeef5ff, .95);
-    const steps = 60, shown = Math.floor(steps * .42);
-    const cur = this.mod.curBase * this.mod.curDir * (this.mod.turb ? .8 : 1);
+    const steps = 60, shown = Math.floor(steps * .26);
     for (let i = 0; i < steps; i++) {
-      this.physStep(p, v, 1 / 45, cur);
-      if (i % 4 === 0 && i / 4 < shown / 4) g.fillCircle(p.x, p.y, 4.5 - (i / steps) * 2.5);
+      this.physStep(p, v, 1 / 45, 0);
+      if (i % 4 === 0 && i < shown) g.fillCircle(p.x, p.y, 4.5 - (i / steps) * 2.5);
     }
   }
 
@@ -553,8 +603,8 @@ class Main extends Phaser.Scene {
     this.hits += 1;
     this.bestSerie = Math.max(this.bestSerie, this.serie);
     const centered = d < c.r * .35;
-    const base = 400 + 40 * this.mod.n + Math.round(300 * (1 - d / c.r));
-    const pts = Math.round(base * (centered ? 1.2 : 1)) * this.serie * (this.mod.signe ? 3 : 1);
+    const base = this.mod.potBase + Math.round(300 * (1 - d / c.r));
+    const pts = Math.round(base * this.launchFactor * (centered ? 1.2 : 1)) * this.serie * (this.mod.signe ? 3 : 1);
     this.score += pts;
     this.burst.emitParticleAt(c.x, c.y, this.mod.signe ? 60 : 26);
     this.cameras.main.flash(280, 232, 199, 102);
