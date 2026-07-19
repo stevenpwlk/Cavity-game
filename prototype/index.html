@@ -81,6 +81,7 @@
     color: var(--argent);
   }
   .fiche b { color: var(--ecume); }
+  .fiche .star { color: var(--or); letter-spacing: .05em; }
   .modif-pill {
     align-self: center;
     margin: 0 auto 8px;
@@ -185,17 +186,18 @@
     </div>
     <span class="serie-chip" id="serie">SÉRIE ×1</span>
   </div>
-  <div class="balles" id="balles"></div>
+  <div class="balles" id="balles" title="Balles restantes"></div>
   <div class="fiche">
-    <span>BALLE <b class="num" id="ballNo">1/5</b></span><span>·</span>
-    <span>PROTOTYPE P1 — <b>PISCINE DES SIFFLEURS</b></span>
+    <span>TIR <b class="num" id="ballNo">1</b></span><span>·</span>
+    <span>COTE <span class="star" id="stars">★☆☆☆☆</span></span><span>·</span>
+    <span>PROTOTYPE P2</span>
   </div>
   <div class="modif-pill" id="modif">PREMIER TIR — RAQUETTE FIXE</div>
 
   <div id="game">
     <div class="venue-tag">
-      <div class="p">PALIER I</div>
-      <div class="n">Piscine Municipale des Siffleurs</div>
+      <div class="p" id="venueP">PALIER I</div>
+      <div class="n" id="venueN">Piscine Municipale des Siffleurs</div>
     </div>
     <div class="courant-chip" id="courant" style="opacity:0"><span>COURANT ››</span><span class="num" id="courantVal">0/3</span></div>
     <div class="stamp-layer" id="stampLayer">
