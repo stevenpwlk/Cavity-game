@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>CAVITÉ — Prototype P1</title>
+<style>
+  /*__FONT__*/
+  :root {
+    --abysse: #050e1e;
+    --ecume: #e9f1fb;
+    --argent: #aebdd0;
+    --argent-sombre: #6d7f96;
+    --or: #e4c05c;
+    --sonar: #4fa3d8;
+    --ligne: rgba(174, 189, 208, .18);
+    --sg: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: #020810;
+    color: var(--ecume);
+    font-family: var(--sg);
+    display: flex;
+    justify-content: center;
+    overscroll-behavior: none;
+    -webkit-font-smoothing: antialiased;
+  }
+  .phone {
+    position: relative;
+    width: 100%;
+    max-width: 430px;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background: var(--abysse);
+    overflow: hidden;
+    touch-action: none;
+  }
+  @media (min-width: 520px) {
+    body { align-items: center; }
+    .phone {
+      height: min(880px, 96dvh);
+      border-radius: 30px;
+      border: 1px solid rgba(174,189,208,.25);
+      box-shadow: 0 40px 90px rgba(0,0,0,.65);
+    }
+  }
+  .num { font-variant-numeric: tabular-nums; }
+
+  .hud {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 16px 6px;
+  }
+  .hud .tag { font-size: 9px; letter-spacing: .22em; color: var(--argent-sombre); }
+  .hud-score { text-align: center; }
+  .hud-score .v { font-size: 24px; font-weight: 700; letter-spacing: .04em; }
+  .hud-score .l { font-size: 9px; letter-spacing: .24em; color: var(--argent-sombre); }
+  .serie-chip {
+    font-size: 11px; font-weight: 700; letter-spacing: .1em;
+    color: var(--or);
+    border: 1px solid rgba(228,192,92,.5);
+    border-radius: 99px;
+    padding: 5px 10px;
+    opacity: .35;
+    transition: opacity .3s, transform .3s;
+  }
+  .serie-chip.on { opacity: 1; }
+  .serie-chip.pop { transform: scale(1.18); }
+  .balles { display: flex; gap: 6px; justify-content: center; padding: 6px 0 4px; }
+  .balles i { width: 8px; height: 8px; border-radius: 50%; background: var(--ecume); }
+  .balles i.off { background: transparent; border: 1px solid var(--argent-sombre); }
+  .fiche {
+    display: flex; justify-content: center; gap: 12px;
+    padding: 2px 12px 8px;
+    font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--argent);
+  }
+  .fiche b { color: var(--ecume); }
+  .modif-pill {
+    align-self: center;
+    margin: 0 auto 8px;
+    font-size: 9px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--or);
+    border: 1px solid rgba(228,192,92,.45);
+    border-radius: 99px;
+    padding: 4px 12px;
+    transition: opacity .3s;
+  }
+
+  #game { position: relative; flex: 1; overflow: hidden; border-top: 1px solid var(--ligne); }
+  #game canvas { display: block; }
+
+  /* tampon résultat */
+  .stamp-layer {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 12px;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 10;
+  }
+  .stamp-layer.show { opacity: 1; }
+  .stamp {
+    font-size: 30px; font-weight: 700;
+    letter-spacing: .28em; margin-right: -.28em;
+    color: var(--or);
+    border: 3px solid var(--or);
+    border-radius: 6px;
+    padding: 12px 18px 12px 24px;
+    transform: rotate(-4deg);
+    background: rgba(5,14,30,.55);
+    backdrop-filter: blur(2px);
+  }
+  .stamp.miss { color: var(--argent); border-color: var(--argent); font-size: 22px; }
+  .stamp-layer.show .stamp { animation: slam .4s cubic-bezier(.2, 2.4, .5, 1) both; }
+  @keyframes slam { from { transform: rotate(-4deg) scale(2.2); opacity: 0; } }
+  .stamp-pts { font-size: 20px; font-weight: 700; color: var(--ecume); letter-spacing: .1em; }
+
+  /* fin de séance */
+  .end-layer {
+    position: absolute; inset: 0;
+    display: none;
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 16px;
+    background: rgba(2,8,16,.82);
+    backdrop-filter: blur(4px);
+    z-index: 20;
+    text-align: center;
+  }
+  .end-layer.show { display: flex; }
+  .end-layer .eyebrow { font-size: 10px; letter-spacing: .24em; color: var(--argent-sombre); }
+  .end-layer h2 { font-size: 22px; letter-spacing: .1em; }
+  .end-layer .big { font-size: 46px; font-weight: 700; }
+  .end-layer .sub { font-size: 12px; color: var(--argent); max-width: 30ch; line-height: 1.6; font-family: 'Segoe UI', system-ui, sans-serif; }
+  .btn {
+    font-family: var(--sg);
+    font-size: 14px; font-weight: 700; letter-spacing: .12em;
+    padding: 14px 28px;
+    border-radius: 99px;
+    border: none; cursor: pointer;
+    color: #131c2c;
+    background: linear-gradient(180deg, #efd07a, var(--or));
+  }
+
+  .hint {
+    position: absolute; left: 16px; bottom: 14px;
+    font-size: 10px; letter-spacing: .14em;
+    color: var(--argent);
+    pointer-events: none;
+    z-index: 5;
+    transition: opacity .4s;
+  }
+  .hint small { display: block; margin-top: 3px; font-size: 9px; letter-spacing: .06em; color: var(--argent-sombre); }
+  .venue-tag { position: absolute; top: 10px; left: 16px; z-index: 5; pointer-events: none; }
+  .venue-tag .p { font-size: 9px; letter-spacing: .2em; color: var(--or); }
+  .venue-tag .n { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+  .courant-chip {
+    position: absolute; top: 48px; left: 16px; z-index: 5;
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 10px; letter-spacing: .14em;
+    color: var(--sonar);
+    border: 1px solid rgba(79,163,216,.4);
+    border-radius: 99px;
+    padding: 5px 11px;
+    background: rgba(5,14,30,.55);
+    pointer-events: none;
+    transition: opacity .3s;
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="hud">
+    <span class="tag">F.I.S.T.</span>
+    <div class="hud-score">
+      <div class="v num" id="score">0</div>
+      <div class="l">POINTS</div>
+    </div>
+    <span class="serie-chip" id="serie">SÉRIE ×1</span>
+  </div>
+  <div class="balles" id="balles"></div>
+  <div class="fiche">
+    <span>BALLE <b class="num" id="ballNo">1/5</b></span><span>·</span>
+    <span>PROTOTYPE P1 — <b>PISCINE DES SIFFLEURS</b></span>
+  </div>
+  <div class="modif-pill" id="modif">PREMIER TIR — RAQUETTE FIXE</div>
+
+  <div id="game">
+    <div class="venue-tag">
+      <div class="p">PALIER I</div>
+      <div class="n">Piscine Municipale des Siffleurs</div>
+    </div>
+    <div class="courant-chip" id="courant" style="opacity:0"><span>COURANT ››</span><span class="num" id="courantVal">0/3</span></div>
+    <div class="stamp-layer" id="stampLayer">
+      <div class="stamp" id="stampText">HOMOLOGUÉ</div>
+      <div class="stamp-pts num" id="stampPts"></div>
+    </div>
+    <div class="end-layer" id="endLayer">
+      <span class="eyebrow">PROCÈS-VERBAL PROVISOIRE</span>
+      <h2>FIN DE SÉANCE</h2>
+      <div class="big num" id="endScore">0</div>
+      <p class="sub" id="endSub"></p>
+      <button class="btn" id="replay">NOUVELLE SÉANCE</button>
+    </div>
+    <div class="hint" id="hint">
+      POSE LE DOIGT, TIRE EN ARRIÈRE, LÂCHE
+      <small>Un seul essai par balle — art. 1 du règlement.</small>
+    </div>
+  </div>
+</div>
+<script src="phaser.min.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
