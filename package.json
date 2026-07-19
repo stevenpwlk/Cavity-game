@@ -1,0 +1,30 @@
+{
+  "name": "trounis-cavite",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node node_modules/next/dist/bin/next dev",
+    "build": "node node_modules/next/dist/bin/next build",
+    "start": "node node_modules/next/dist/bin/next start",
+    "typecheck": "node node_modules/typescript/bin/tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/ssr": "0.12.0",
+    "@supabase/supabase-js": "2.108.2",
+    "next": "16.2.9",
+    "phaser": "3.87.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@types/react": "19.2.7",
+    "@types/react-dom": "19.2.3",
+    "typescript": "6.0.3"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

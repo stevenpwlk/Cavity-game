@@ -1,0 +1,127 @@
+:root {
+  --abysse: #050e1e;
+  --ecume: #e9f1fb;
+  --argent: #aebdd0;
+  --argent-sombre: #6d7f96;
+  --or: #e4c05c;
+  --sonar: #4fa3d8;
+  --ligne: rgba(174, 189, 208, 0.18);
+  --sg: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: #020810;
+  color: var(--ecume);
+  font-family: var(--sg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+a {
+  color: inherit;
+}
+
+.phone-shell {
+  display: flex;
+  justify-content: center;
+  min-height: 100dvh;
+}
+
+.phone {
+  position: relative;
+  width: 100%;
+  max-width: 430px;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--abysse);
+  overflow: hidden;
+}
+
+@media (min-width: 520px) {
+  .phone-shell {
+    align-items: center;
+  }
+  .phone {
+    min-height: unset;
+    height: min(880px, 96dvh);
+    border-radius: 30px;
+    border: 1px solid rgba(174, 189, 208, 0.25);
+    box-shadow: 0 40px 90px rgba(0, 0, 0, 0.65);
+  }
+}
+
+.btn {
+  font-family: var(--sg);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 14px 28px;
+  border-radius: 99px;
+  border: none;
+  cursor: pointer;
+  color: #131c2c;
+  background: linear-gradient(180deg, #efd07a, var(--or));
+  box-shadow: 0 8px 26px rgba(228, 192, 92, 0.25);
+  transition: transform 0.15s ease;
+}
+.btn:active {
+  transform: scale(0.97);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-ghost {
+  font-family: var(--sg);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 12px 20px;
+  border-radius: 99px;
+  border: 1px solid var(--ligne);
+  background: rgba(22, 52, 93, 0.35);
+  color: var(--ecume);
+  cursor: pointer;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+.field label {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--argent-sombre);
+}
+.field input {
+  font-family: var(--sg);
+  font-size: 15px;
+  background: rgba(10, 28, 56, 0.6);
+  border: 1px solid var(--ligne);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--ecume);
+}
+.field input:focus {
+  outline: 2px solid var(--sonar);
+  outline-offset: 1px;
+}
