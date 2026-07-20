@@ -152,6 +152,10 @@ export class CaviteScene extends Phaser.Scene {
   private bgImage: Phaser.GameObjects.Image | null = null;
   private photoBg = false;
   private venueBgUrl: string | null = null;
+  // Latéralité : quand true (droitier), le canvas est retourné en miroir via CSS
+  // (voir CaviteGame). La simulation reste canonique ; on ré-inverse simplement
+  // le X du doigt pour que la visée corresponde à ce qui est affiché.
+  private flipX = false;
 
   private trail!: Phaser.GameObjects.Particles.ParticleEmitter;
   private burst!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -167,10 +171,11 @@ export class CaviteScene extends Phaser.Scene {
     super("cavite");
   }
 
-  init(data: { seed: number; callbacks: CaviteCallbacks }) {
+  init(data: { seed: number; callbacks: CaviteCallbacks; flipX?: boolean }) {
     this.seed = data.seed;
     this.rng = mulberry32(this.seed);
     this.callbacks = data.callbacks;
+    this.flipX = !!data.flipX;
   }
 
   preload() {
@@ -280,14 +285,15 @@ export class CaviteScene extends Phaser.Scene {
         initAudio();
         if (this.tutorialGfx) this.hideTutorialHint();
         this.stateName = "aiming";
-        this.aimStart = { x: p.x, y: p.y };
-        this.aimCur = { x: p.x, y: p.y };
+        const px = this.flipX ? W - p.x : p.x;
+        this.aimStart = { x: px, y: p.y };
+        this.aimCur = { x: px, y: p.y };
       } catch (e) {
         this.reportCrash(e);
       }
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
-      if (this.stateName === "aiming") this.aimCur = { x: p.x, y: p.y };
+      if (this.stateName === "aiming") this.aimCur = { x: this.flipX ? W - p.x : p.x, y: p.y };
     });
     this.input.on("pointerup", () => {
       try {
@@ -360,6 +366,9 @@ export class CaviteScene extends Phaser.Scene {
         fontStyle: "bold"
       })
       .setOrigin(0.5)
+      // Le canvas entier est retourné en miroir côté CSS pour les droitiers ;
+      // on contre-inverse le seul texte in-canvas pour qu'il reste lisible.
+      .setScale(this.flipX ? -1 : 1, 1)
       .setAlpha(0.85);
 
     this.tutorialGfx = this.add.container(0, 0, [dot, label]);

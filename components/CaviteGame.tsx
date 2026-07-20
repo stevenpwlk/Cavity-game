@@ -14,6 +14,27 @@ interface Summary {
   bestSerie: number;
 }
 
+// Latéralité de tir, persistée par appareil. "R" (droitier) par défaut : le jeu
+// s'affiche alors en miroir de la disposition canonique (balle en bas à droite).
+type Hand = "L" | "R";
+const HAND_KEY = "cavite_hand_v1";
+
+function readHand(): Hand {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(HAND_KEY) === "L" ? "L" : "R";
+  } catch {
+    return "R";
+  }
+}
+
+function writeHand(h: Hand): void {
+  try {
+    window.localStorage.setItem(HAND_KEY, h);
+  } catch {
+    /* stockage indisponible, tant pis */
+  }
+}
+
 const DISPATCHES = [
   "Dépêche F.I.S.T. n°071 — Le sifflet réglementaire doit être immergé trois secondes avant tout coup d'Anchosiffle, sous peine d'invalidation du tir.",
   "Communiqué du Conseil — La raquette ne peut être huilée qu'au beurre clarifié. L'huile de tournesol reste strictement prohibée.",
@@ -51,6 +72,16 @@ export function CaviteGame({ displayName }: { displayName: string }) {
   const [mode, setMode] = useState<Mode>("normal");
   const [dispatch, setDispatch] = useState("");
   const [crashMsg, setCrashMsg] = useState<string | null>(null);
+  const [hand, setHand] = useState<Hand>("R");
+  const rightHanded = hand === "R";
+
+  // Lu après le montage pour éviter tout écart d'hydratation SSR (le serveur et
+  // le premier rendu client partent tous deux du défaut "R").
+  useEffect(() => setHand(readHand()), []);
+  const changeHand = (h: Hand) => {
+    setHand(h);
+    writeHand(h);
+  };
 
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<import("phaser").Game | null>(null);
@@ -113,6 +144,7 @@ export function CaviteGame({ displayName }: { displayName: string }) {
       // sûre à appeler avant la fin du boot.
       gameRef.current.scene.add("cavite", scene, true, {
         seed: data.seed,
+        flipX: hand === "R",
         callbacks: {
           onHud: (h: HudState) => setHud(h),
           onStamp: (s: StampEvent) => {
@@ -173,7 +205,7 @@ export function CaviteGame({ displayName }: { displayName: string }) {
         ) : null}
 
         {screen === "menu" ? (
-          <MenuScreen displayName={displayName} onStart={startRun} />
+          <MenuScreen displayName={displayName} onStart={startRun} hand={hand} onHandChange={changeHand} />
         ) : null}
 
         {screen === "loading" ? (
@@ -209,7 +241,7 @@ export function CaviteGame({ displayName }: { displayName: string }) {
 
         <div
           ref={containerRef}
-          className={hud?.venueBg ? "canvas-lift" : undefined}
+          className={["game-stage", hud?.venueBg ? "lift" : "", rightHanded ? "hand-r" : ""].filter(Boolean).join(" ")}
           style={{ display: screen === "playing" ? "block" : "none", flex: 1, touchAction: "none", position: "relative", zIndex: 1 }}
         />
 
@@ -251,7 +283,17 @@ export function CaviteGame({ displayName }: { displayName: string }) {
   );
 }
 
-function MenuScreen({ displayName, onStart }: { displayName: string; onStart: (mode: Mode) => void }) {
+function MenuScreen({
+  displayName,
+  onStart,
+  hand,
+  onHandChange
+}: {
+  displayName: string;
+  onStart: (mode: Mode) => void;
+  hand: Hand;
+  onHandChange: (h: Hand) => void;
+}) {
   return (
     <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", padding: 22, gap: 22, overflow: "hidden" }}>
       <div className="menu-backdrop">
@@ -308,9 +350,57 @@ function MenuScreen({ displayName, onStart }: { displayName: string; onStart: (m
             <span style={{ fontWeight: 700, letterSpacing: "0.06em", fontSize: 15 }}>CLASSEMENTS</span>
           </Link>
         </div>
+
+        <div style={{ marginTop: "auto", paddingTop: 8 }}>
+          <div
+            style={{
+              fontSize: 9,
+              letterSpacing: "0.2em",
+              color: "var(--argent-sombre)",
+              textAlign: "center",
+              marginBottom: 8
+            }}
+          >
+            LATÉRALITÉ HOMOLOGUÉE
+          </div>
+          <div
+            style={{
+              display: "flex",
+              gap: 3,
+              padding: 3,
+              border: "1px solid var(--ligne)",
+              borderRadius: 99,
+              maxWidth: 260,
+              margin: "0 auto"
+            }}
+          >
+            <button onClick={() => onHandChange("L")} style={handSegStyle(hand === "L")}>
+              GAUCHER
+            </button>
+            <button onClick={() => onHandChange("R")} style={handSegStyle(hand === "R")}>
+              DROITIER
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
+}
+
+function handSegStyle(active: boolean): React.CSSProperties {
+  return {
+    flex: 1,
+    fontFamily: "var(--sg)",
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: "0.1em",
+    padding: "9px 0",
+    borderRadius: 99,
+    border: "none",
+    background: active ? "#16345d" : "transparent",
+    color: active ? "var(--ecume)" : "var(--argent)",
+    cursor: "pointer"
+  };
 }
 
 function cardStyle(gold: boolean): React.CSSProperties {
