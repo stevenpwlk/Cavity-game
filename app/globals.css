@@ -6,7 +6,7 @@
   --or: #e4c05c;
   --sonar: #4fa3d8;
   --ligne: rgba(174, 189, 208, 0.18);
-  --sg: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --sg: var(--font-space-grotesk), "Segoe UI", system-ui, sans-serif;
 }
 
 * {
@@ -124,4 +124,65 @@ a {
 .field input:focus {
   outline: 2px solid var(--sonar);
   outline-offset: 1px;
+}
+
+.menu-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.menu-caustic {
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(79, 163, 216, 0.16), transparent 55%),
+    radial-gradient(circle at 80% 68%, rgba(228, 192, 92, 0.08), transparent 50%),
+    radial-gradient(circle at 46% 92%, rgba(79, 163, 216, 0.1), transparent 60%);
+  filter: blur(6px);
+  animation: causticDrift 22s ease-in-out infinite alternate;
+}
+
+.menu-bubble {
+  position: absolute;
+  bottom: -40px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.55), rgba(174, 189, 208, 0.05) 70%);
+  border: 1px solid rgba(219, 233, 248, 0.25);
+  animation: bubbleRise linear infinite;
+}
+
+@keyframes causticDrift {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(4%, -3%) scale(1.06);
+  }
+}
+
+@keyframes bubbleRise {
+  0% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.55;
+  }
+  85% {
+    opacity: 0.3;
+  }
+  100% {
+    transform: translateY(-540px) translateX(16px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-caustic,
+  .menu-bubble {
+    animation: none;
+  }
 }

@@ -24,7 +24,7 @@ export default function ConnexionPage() {
           <span style={{ fontSize: 9, letterSpacing: "0.24em", color: "var(--argent-sombre)" }}>
             F.I.S.T. — CENTRE D&apos;ENTRAÎNEMENT OFFICIEL
           </span>
-          <h1 style={{ fontSize: 34, fontWeight: 700, letterSpacing: "0.08em" }}>CAVITÉ</h1>
+          <h1 style={{ fontSize: 34, fontWeight: 700, letterSpacing: "0.08em" }}>CAVITY GAME</h1>
         </div>
 
         <form

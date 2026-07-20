@@ -14,6 +14,34 @@ interface Summary {
   bestSerie: number;
 }
 
+const DISPATCHES = [
+  "Dépêche F.I.S.T. n°071 — Le sifflet réglementaire doit être immergé trois secondes avant tout coup d'Anchosiffle, sous peine d'invalidation du tir.",
+  "Communiqué du Conseil — La raquette ne peut être huilée qu'au beurre clarifié. L'huile de tournesol reste strictement prohibée.",
+  "Note de service — Un requin-marteau ayant traversé la cavité sans faute technique conserve son droit de passage jusqu'à la fin de la manche.",
+  "Bulletin officiel — Le nuage de paprika est classé arôme réglementaire depuis la réforme de l'an dernier. Toute contestation se fait par écrit.",
+  "Avis aux licenciés — Un banc d'anchois traversant la trajectoire n'est ni un obstacle ni un bonus tant que le Conseil n'a pas tranché.",
+  "Procès-verbal type — Toute balle immergée plus de quinze mètres est déclarée définitivement coulée, sauf saisine du Conseil des Siffleurs.",
+  "Circulaire n°12 — Le courant peut légalement changer de sens sans préavis, conformément à l'article 4 du règlement aquatique.",
+  "Mémo interne — La Fosse Paprikée Internationale n'accepte aucune réclamation formulée hors du bassin.",
+  "Communiqué — Le duel de souffle reste l'unique méthode homologuée pour départager un vote 2-2 du Conseil.",
+  "Rappel réglementaire — Delphes-sur-Mer impose une salinité mesurée chaque matin par un huissier assermenté.",
+  "Avis du greffe — Tout tir signé homologué triple les points, mais engage la responsabilité morale du tireur devant le Conseil.",
+  "Note technique — Le Couloir des Requins-Marteaux est en transit permanent ; aucune pause n'est prévue au calendrier.",
+  "Bulletin météo aquatique — Bassin calme en surface, jugé « charpenté, notes de sédiment » par le sommelier officiel.",
+  "Dépêche express — Les vies restantes ne sont pas remboursables, sauf décision contraire du Conseil des Siffleurs."
+];
+
+function pickDispatch(): string {
+  return DISPATCHES[Math.floor(Math.random() * DISPATCHES.length)]!;
+}
+
+const BUBBLES = Array.from({ length: 9 }, (_, i) => ({
+  left: (i * 41 + 6) % 100,
+  size: 5 + ((i * 11) % 9),
+  duration: 10 + ((i * 7) % 9),
+  delay: (i * 2.6) % 9
+}));
+
 export function CaviteGame({ displayName }: { displayName: string }) {
   const [screen, setScreen] = useState<Screen>("menu");
   const [hud, setHud] = useState<HudState | null>(null);
@@ -21,6 +49,8 @@ export function CaviteGame({ displayName }: { displayName: string }) {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("normal");
+  const [dispatch, setDispatch] = useState("");
+  const [crashMsg, setCrashMsg] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<import("phaser").Game | null>(null);
@@ -31,7 +61,9 @@ export function CaviteGame({ displayName }: { displayName: string }) {
   async function startRun(selectedMode: Mode) {
     setMode(selectedMode);
     setScreen("loading");
+    setDispatch(pickDispatch());
     setErrorMsg(null);
+    setCrashMsg(null);
     try {
       const res = await fetch("/api/runs/start", {
         method: "POST",
@@ -53,17 +85,28 @@ export function CaviteGame({ displayName }: { displayName: string }) {
       const scene = new CaviteScene();
       sceneRef.current = scene;
 
+      // `?canvas=1` force le renderer Canvas de Phaser : le rendu WebGL est
+      // instable en headless (GPU stall SwiftShader/ANGLE sur certaines
+      // machines), ce qui fige les captures d'écran automatisées. Le mode
+      // Canvas est fidèle au visuel (seuls les postFX bloom/vignette WebGL,
+      // déjà en try/catch, sont absents) et permet de tester le jeu.
+      const forceCanvas =
+        typeof window !== "undefined" && new URLSearchParams(window.location.search).get("canvas") === "1";
+
       gameRef.current = new Phaser.Game({
-        type: Phaser.AUTO,
+        type: forceCanvas ? Phaser.CANVAS : Phaser.AUTO,
         parent: containerRef.current!,
         backgroundColor: "#050e1e",
         width: 780,
         height: 1240,
-        scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-        scene
+        scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH }
       });
 
-      scene.scene.settings.data = {
+      // Le boot de la Game est différé par Phaser : `scene.scene` (le plugin
+      // injecté sur l'instance) n'existe pas encore ici. `game.scene.add(...,
+      // autoStart, data)` passe par la file d'attente du SceneManager, qui est
+      // sûre à appeler avant la fin du boot.
+      gameRef.current.scene.add("cavite", scene, true, {
         seed: data.seed,
         callbacks: {
           onHud: (h: HudState) => setHud(h),
@@ -72,12 +115,14 @@ export function CaviteGame({ displayName }: { displayName: string }) {
             if (stampTimer.current) clearTimeout(stampTimer.current);
             stampTimer.current = setTimeout(() => setStamp(null), 1050);
           },
-          onEnd: (s: Summary) => void finishRun(s)
+          onEnd: (s: Summary) => void finishRun(s),
+          onCrash: (m: string) => setCrashMsg(m)
         }
-      };
+      });
 
       setScreen("playing");
-    } catch {
+    } catch (e) {
+      console.error("startRun failed", e);
       setErrorMsg("Impossible de démarrer la séance. Réessaie.");
       setScreen("error");
     }
@@ -123,8 +168,20 @@ export function CaviteGame({ displayName }: { displayName: string }) {
         ) : null}
 
         {screen === "loading" ? (
-          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 14,
+              padding: "0 34px",
+              textAlign: "center"
+            }}
+          >
             <span style={{ fontSize: 11, letterSpacing: "0.16em", color: "var(--argent)" }}>OUVERTURE DU BASSIN…</span>
+            <p style={{ fontSize: 11, color: "var(--argent-sombre)", lineHeight: 1.6, fontStyle: "italic" }}>{dispatch}</p>
           </div>
         ) : null}
 
@@ -141,10 +198,43 @@ export function CaviteGame({ displayName }: { displayName: string }) {
 
         {screen === "playing" ? <PlayingChrome hud={hud} stamp={stamp} mode={mode} /> : null}
 
-        <div ref={containerRef} style={{ display: screen === "playing" ? "block" : "none", flex: 1 }} />
+        <div
+          ref={containerRef}
+          style={{ display: screen === "playing" ? "block" : "none", flex: 1, touchAction: "none" }}
+        />
 
         {screen === "summary" && summary ? (
           <SummaryScreen summary={summary} onReplay={() => startRun(mode)} onMenu={() => setScreen("menu")} />
+        ) : null}
+
+        {crashMsg ? (
+          <div
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 30,
+              background: "rgba(120,20,20,.94)",
+              color: "#fff",
+              padding: "12px 14px",
+              fontSize: 11,
+              lineHeight: 1.5,
+              fontFamily: "monospace"
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+              <b>Erreur technique détectée</b>
+              <button
+                onClick={() => setCrashMsg(null)}
+                style={{ background: "none", border: "none", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 15 }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ wordBreak: "break-word" }}>{crashMsg}</div>
+            <div style={{ marginTop: 6, opacity: 0.8 }}>Capture d&apos;écran utile pour le débogage, merci.</div>
+          </div>
         ) : null}
       </div>
     </div>
@@ -153,40 +243,61 @@ export function CaviteGame({ displayName }: { displayName: string }) {
 
 function MenuScreen({ displayName, onStart }: { displayName: string; onStart: (mode: Mode) => void }) {
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: 22, gap: 22 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 9, letterSpacing: "0.22em", color: "var(--argent-sombre)" }}>F.I.S.T.</span>
-        <span style={{ fontSize: 12, color: "var(--argent)" }}>{displayName}</span>
+    <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", padding: 22, gap: 22, overflow: "hidden" }}>
+      <div className="menu-backdrop">
+        <div className="menu-caustic" />
+        {BUBBLES.map((b, i) => (
+          <span
+            key={i}
+            className="menu-bubble"
+            style={{
+              left: `${b.left}%`,
+              width: b.size,
+              height: b.size,
+              animationDuration: `${b.duration}s`,
+              animationDelay: `${b.delay}s`
+            }}
+          />
+        ))}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginTop: 20 }}>
-        <span style={{ fontSize: 9, letterSpacing: "0.2em", color: "var(--argent-sombre)" }}>
-          CENTRE D&apos;ENTRAÎNEMENT OFFICIEL
-        </span>
-        <h1 style={{ fontSize: 40, fontWeight: 700, letterSpacing: "0.06em" }}>CAVITÉ</h1>
-      </div>
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", gap: 22, flex: 1 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <Link
+            href="https://prono.trounis.fr/"
+            style={{ fontSize: 10, letterSpacing: "0.14em", color: "var(--sonar)", textDecoration: "underline" }}
+          >
+            ‹ RETOUR AUX PRONOS
+          </Link>
+          <span style={{ fontSize: 12, color: "var(--argent)" }}>{displayName}</span>
+        </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
-        <button
-          onClick={() => onStart("normal")}
-          style={cardStyle(false)}
-        >
-          <span style={{ fontWeight: 700, letterSpacing: "0.06em", fontSize: 15 }}>SÉANCE LIBRE</span>
-          <span style={{ fontSize: 11, color: "var(--argent)", lineHeight: 1.5 }}>
-            Run infini, difficulté croissante — trois balles.
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginTop: 12 }}>
+          <span style={{ fontSize: 9, letterSpacing: "0.2em", color: "var(--argent-sombre)" }}>
+            CENTRE D&apos;ENTRAÎNEMENT OFFICIEL
           </span>
-        </button>
-        <button onClick={() => onStart("daily")} style={cardStyle(true)}>
-          <span style={{ fontWeight: 700, letterSpacing: "0.06em", fontSize: 15, color: "var(--or)" }}>
-            DÉFI HOMOLOGUÉ DU JOUR
-          </span>
-          <span style={{ fontSize: 11, color: "var(--argent)", lineHeight: 1.5 }}>
-            Bassin identique pour tous — tentatives illimitées, meilleur score du jour retenu.
-          </span>
-        </button>
-        <Link href="/classement" style={{ ...cardStyle(false), textDecoration: "none" }}>
-          <span style={{ fontWeight: 700, letterSpacing: "0.06em", fontSize: 15 }}>CLASSEMENTS</span>
-        </Link>
+          <h1 style={{ fontSize: 40, fontWeight: 700, letterSpacing: "0.06em" }}>CAVITY GAME</h1>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
+          <button onClick={() => onStart("normal")} style={cardStyle(false)}>
+            <span style={{ fontWeight: 700, letterSpacing: "0.06em", fontSize: 15 }}>SÉANCE LIBRE</span>
+            <span style={{ fontSize: 11, color: "var(--argent)", lineHeight: 1.5 }}>
+              Run infini, difficulté croissante — trois balles.
+            </span>
+          </button>
+          <button onClick={() => onStart("daily")} style={cardStyle(true)}>
+            <span style={{ fontWeight: 700, letterSpacing: "0.06em", fontSize: 15, color: "var(--or)" }}>
+              DÉFI HOMOLOGUÉ DU JOUR
+            </span>
+            <span style={{ fontSize: 11, color: "var(--argent)", lineHeight: 1.5 }}>
+              Bassin identique pour tous — tentatives illimitées, meilleur score du jour retenu.
+            </span>
+          </button>
+          <Link href="/classement" style={{ ...cardStyle(false), textDecoration: "none" }}>
+            <span style={{ fontWeight: 700, letterSpacing: "0.06em", fontSize: 15 }}>CLASSEMENTS</span>
+          </Link>
+        </div>
       </div>
     </div>
   );

@@ -9,11 +9,31 @@ import {
   potFactor,
   currentNow,
   physStep,
+  simulateShot,
   type ShotDiff,
   type ShotInput,
   type Vec2
 } from "@/lib/engine";
 import { initAudio, playLaunch, playBounce, playSharkHit, playHomologue, playMiss } from "@/lib/sound";
+import { vibrateLaunch, vibrateBounce, vibrateSharkHit, vibrateHit, vibrateMiss } from "@/lib/haptics";
+
+const TUTORIAL_KEY = "cavite_tutorial_seen_v1";
+
+function tutorialSeen(): boolean {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(TUTORIAL_KEY) === "1";
+  } catch {
+    return true;
+  }
+}
+
+function markTutorialSeen(): void {
+  try {
+    window.localStorage.setItem(TUTORIAL_KEY, "1");
+  } catch {
+    /* stockage indisponible, tant pis */
+  }
+}
 
 const { W, H, SURF, LAUNCH_K, SPEED_MAX } = ENGINE;
 
@@ -24,6 +44,11 @@ const VENUES = [
   { nom: "Couloir des Requins-Marteaux", sky: 0x0a1526, top: 0x16304e, bot: 0x030a16, decor: "requins" }
 ] as const;
 const ROMAIN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+const PILLAR_XS = [120, 660] as const;
+// Ligne de surface de l'eau dans le fond illustré (≈26 % de la hauteur), qui
+// diffère du SURF procédural (150) — sert à recaler les caustiques sur les
+// bassins à fond photo.
+const PHOTO_SURF = 322;
 
 const MILESTONES: Record<number, string> = {
   1: "PREMIER TIR — RAQUETTE FIXE",
@@ -63,6 +88,7 @@ export interface CaviteCallbacks {
   onHud: (hud: HudState) => void;
   onStamp: (stamp: StampEvent) => void;
   onEnd: (summary: { score: number; hits: number; tirAtteint: number; bestSerie: number }) => void;
+  onCrash?: (message: string) => void;
 }
 
 type Phase = "ready" | "aiming" | "flying" | "pause" | "over";
@@ -109,6 +135,7 @@ export class CaviteScene extends Phaser.Scene {
   private bokehLayer!: Phaser.GameObjects.Container;
   private caustic1!: Phaser.GameObjects.TileSprite;
   private caustic2!: Phaser.GameObjects.TileSprite;
+  private raysGfx!: Phaser.GameObjects.Graphics;
   private grain!: Phaser.GameObjects.TileSprite;
   private waveGfx!: Phaser.GameObjects.Graphics;
   private flowGfx!: Phaser.GameObjects.Graphics;
@@ -120,11 +147,18 @@ export class CaviteScene extends Phaser.Scene {
   private flowX = 0;
   private flowSeeds: { y: number; off: number; len: number }[] = [];
   private racketOrigin = { x: 0.5, y: 0.5 };
+  private bgImage: Phaser.GameObjects.Image | null = null;
+  private photoBg = false;
 
   private trail!: Phaser.GameObjects.Particles.ParticleEmitter;
   private burst!: Phaser.GameObjects.Particles.ParticleEmitter;
 
   private shots: ShotInput[] = [];
+  private slowMoActive = false;
+  private flightStartedAt = 0;
+  private crashReported = false;
+  private tutorialGfx: Phaser.GameObjects.Container | null = null;
+  private tutorialShown = false;
 
   constructor() {
     super("cavite");
@@ -136,8 +170,19 @@ export class CaviteScene extends Phaser.Scene {
     this.callbacks = data.callbacks;
   }
 
+  preload() {
+    // Fond illustré du bassin des Siffleurs (généré via image_gen, servi en
+    // statique). Les autres bassins restent en rendu procédural pour l'instant ;
+    // si le chargement échoue, drawArena retombe automatiquement sur le décor
+    // procédural (garde-fou this.bgImage !== null).
+    this.load.image("bg_siffleurs", "/backgrounds/bassin-siffleurs.webp");
+  }
+
   create() {
     this.makeTextures();
+    this.bgImage = this.textures.exists("bg_siffleurs")
+      ? this.add.image(W / 2, H / 2, "bg_siffleurs").setDisplaySize(W, H).setVisible(false)
+      : null;
     this.arenaGfx = this.add.graphics();
     this.bokehLayer = this.add.container();
     this.caustic1 = this.add
@@ -151,6 +196,8 @@ export class CaviteScene extends Phaser.Scene {
       .setBlendMode(Phaser.BlendModes.ADD)
       .setAlpha(0.06)
       .setTileScale(1.4, 1.4);
+
+    this.raysGfx = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
 
     this.racket = this.add.container(600, 520);
     this.buildRacket();
@@ -225,25 +272,34 @@ export class CaviteScene extends Phaser.Scene {
     }
 
     this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
-      if (this.stateName !== "ready") return;
-      initAudio();
-      this.stateName = "aiming";
-      this.aimStart = { x: p.x, y: p.y };
-      this.aimCur = { x: p.x, y: p.y };
+      try {
+        if (this.stateName !== "ready") return;
+        initAudio();
+        if (this.tutorialGfx) this.hideTutorialHint();
+        this.stateName = "aiming";
+        this.aimStart = { x: p.x, y: p.y };
+        this.aimCur = { x: p.x, y: p.y };
+      } catch (e) {
+        this.reportCrash(e);
+      }
     });
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
       if (this.stateName === "aiming") this.aimCur = { x: p.x, y: p.y };
     });
     this.input.on("pointerup", () => {
-      if (this.stateName !== "aiming") return;
-      const dx = this.aimStart.x - this.aimCur.x;
-      const dy = this.aimStart.y - this.aimCur.y;
-      this.aimGfx.clear();
-      if (Math.hypot(dx, dy) < ENGINE.MIN_DRAG) {
-        this.stateName = "ready";
-        return;
+      try {
+        if (this.stateName !== "aiming") return;
+        const dx = this.aimStart.x - this.aimCur.x;
+        const dy = this.aimStart.y - this.aimCur.y;
+        this.aimGfx.clear();
+        if (Math.hypot(dx, dy) < ENGINE.MIN_DRAG) {
+          this.stateName = "ready";
+          return;
+        }
+        this.launch(dx, dy);
+      } catch (e) {
+        this.reportCrash(e);
       }
-      this.launch(dx, dy);
     });
 
     this.startRun();
@@ -279,6 +335,44 @@ export class CaviteScene extends Phaser.Scene {
 
     this.resetBall();
     this.emitHud();
+
+    if (this.tir === 1 && !this.tutorialShown && !tutorialSeen()) {
+      this.showTutorialHint();
+    }
+  }
+
+  private showTutorialHint() {
+    this.tutorialShown = true;
+    const startX = this.ball.x;
+    const startY = this.ball.y;
+    const endX = startX - 70;
+    const endY = startY + 90;
+
+    const dot = this.add.circle(startX, startY, 16, 0xe9f1fb, 0.85).setStrokeStyle(2, 0x4fa3d8, 0.9);
+    const label = this.add
+      .text(startX, startY - 70, "GLISSE POUR VISER", {
+        fontFamily: "sans-serif",
+        fontSize: "15px",
+        color: "#e9f1fb",
+        fontStyle: "bold"
+      })
+      .setOrigin(0.5)
+      .setAlpha(0.85);
+
+    this.tutorialGfx = this.add.container(0, 0, [dot, label]);
+    this.tutorialGfx.setDepth(50);
+
+    this.tweens.add({ targets: dot, x: endX, y: endY, duration: 900, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+    this.tweens.add({ targets: label, alpha: { from: 0.85, to: 0.4 }, duration: 900, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+  }
+
+  private hideTutorialHint() {
+    if (this.tutorialGfx) {
+      this.tweens.killTweensOf(this.tutorialGfx.list);
+      this.tutorialGfx.destroy(true);
+      this.tutorialGfx = null;
+    }
+    markTutorialSeen();
   }
 
   private resetBall() {
@@ -328,17 +422,53 @@ export class CaviteScene extends Phaser.Scene {
     const readySeconds = this.tSinceShotStart();
     this.shots.push({ dx, dy, readySeconds });
     this.ballLaunchPotF = potFactor(readySeconds);
+    // Sur la dernière balle, si ce tir va terminer la série (prédiction via le
+    // même moteur déterministe que le rejeu serveur), on joue le vol au ralenti
+    // pour le suspense — cosmétique uniquement, le score reste calculé par le
+    // rejeu réel côté serveur.
+    this.slowMoActive = this.lives === 1 && !simulateShot(this.mod, this.seed, { dx, dy, readySeconds }).hit;
     this.stateName = "flying";
+    this.flightStartedAt = this.time.now;
     this.ballFlyT = 0;
     this.ballBounced = false;
     this.ballSharkHit = false;
     this.trace = [];
     playLaunch();
+    vibrateLaunch();
     this.trail.emitParticleAt(this.ball.x, this.ball.y, 6);
   }
 
-  update(_: number, dms: number) {
-    const dt = Math.min(dms / 1000, 0.033);
+  update(time: number, dms: number) {
+    // Filet de diagnostic : si safeUpdate() lève une exception (constatée sur
+    // Safari iOS, cause encore non identifiée), on l'attrape ici plutôt que
+    // de laisser la frame planter silencieusement — ce qui, sur certains
+    // moteurs JS, tue la boucle requestAnimationFrame et fige le jeu pour de
+    // bon, y compris le filet de sécurité temporel plus bas. On journalise
+    // et on remonte le message à l'écran via onCrash pour pouvoir diagnostiquer
+    // sans accès à un vrai appareil iOS.
+    try {
+      this.safeUpdate(time, dms);
+    } catch (e) {
+      this.reportCrash(e);
+    }
+  }
+
+  private reportCrash(e: unknown): void {
+    // eslint-disable-next-line no-console
+    console.error("CaviteScene update crashed", e);
+    if (this.crashReported) return;
+    this.crashReported = true;
+    const message = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    this.callbacks.onCrash?.(message);
+  }
+
+  private safeUpdate(_: number, dms: number) {
+    // Sur certains navigateurs mobiles (Safari iOS notamment), un delta de
+    // frame anormal (NaN, négatif, énorme après une pause d'onglet) peut
+    // survenir ; on le neutralise ici pour ne jamais laisser un NaN
+    // contaminer la physique (ce qui gèlerait la balle indéfiniment).
+    const rawDt = dms / 1000;
+    const dt = Number.isFinite(rawDt) && rawDt > 0 ? Math.min(rawDt, 0.033) : 0;
     const d = this.mod;
     if (!d) return;
 
@@ -367,15 +497,25 @@ export class CaviteScene extends Phaser.Scene {
     this.caustic2.tilePositionX -= dt * 6;
     this.caustic2.tilePositionY += dt * 7;
 
+    // Sur un bassin à fond photo, la photo porte déjà ses propres rais de
+    // lumière et sa surface — on n'y superpose pas les versions procédurales.
+    if (this.photoBg) {
+      this.raysGfx.clear();
+    } else {
+      this.drawRays();
+    }
+
     this.waveT += dt;
     this.waveGfx.clear();
-    this.waveGfx.lineStyle(3, 0xe6f1fc, 0.8);
-    this.waveGfx.beginPath();
-    for (let x = 0; x <= W; x += 12) {
-      const y = SURF + Math.sin(x / 46 + this.waveT * 1.8) * 4;
-      x === 0 ? this.waveGfx.moveTo(x, y) : this.waveGfx.lineTo(x, y);
+    if (!this.photoBg) {
+      this.waveGfx.lineStyle(3, 0xe6f1fc, 0.8);
+      this.waveGfx.beginPath();
+      for (let x = 0; x <= W; x += 12) {
+        const y = SURF + Math.sin(x / 46 + this.waveT * 1.8) * 4;
+        x === 0 ? this.waveGfx.moveTo(x, y) : this.waveGfx.lineTo(x, y);
+      }
+      this.waveGfx.strokePath();
     }
-    this.waveGfx.strokePath();
 
     // pose de la raquette pilotée par le moteur partagé
     const tShot = this.tSinceShotStart();
@@ -438,13 +578,24 @@ export class CaviteScene extends Phaser.Scene {
     if (this.stateName === "aiming") this.drawAim();
 
     if (this.stateName === "flying") {
+      // Filet de sécurité indépendant de l'accumulateur ballFlyT : si un tir
+      // ne s'est toujours pas résolu après un délai réel généreux (mesuré
+      // via l'horloge de Phaser, insensible à une éventuelle corruption du
+      // delta de frame), on force un raté plutôt que de laisser la balle
+      // bloquée indéfiniment.
+      const failsafeMs = this.slowMoActive ? 12000 : 5000;
+      if (this.time.now - this.flightStartedAt > failsafeMs) {
+        this.onMiss();
+        return;
+      }
+      const flightDt = this.slowMoActive ? dt * 0.32 : dt;
       const prev: Vec2 = { x: this.ball.x, y: this.ball.y };
       const p: Vec2 = { x: this.ball.x, y: this.ball.y };
-      physStep(p, this.ballVel, dt, currentNow(d, this.ballFlyT));
+      physStep(p, this.ballVel, flightDt, currentNow(d, this.ballFlyT));
       this.ball.setPosition(p.x, p.y);
-      this.ballFlyT += dt;
-      this.ball.rotation += dt * 2.4;
-      if (Math.random() < 0.35) this.trail.emitParticleAt(this.ball.x - 6, this.ball.y, 1);
+      this.ballFlyT += flightDt;
+      this.ball.rotation += flightDt * 2.4;
+      if (Math.random() < (this.slowMoActive ? 0.14 : 0.35)) this.trail.emitParticleAt(this.ball.x - 6, this.ball.y, 1);
       if (Math.random() < 0.5) this.trace.push({ x: this.ball.x, y: this.ball.y });
 
       if (d.shark && !this.ballSharkHit) {
@@ -459,6 +610,7 @@ export class CaviteScene extends Phaser.Scene {
             this.cameras.main.shake(110, 0.005);
             this.trail.emitParticleAt(this.ball.x, this.ball.y, 10);
             playSharkHit();
+            vibrateSharkHit();
           }
         }
       }
@@ -482,6 +634,7 @@ export class CaviteScene extends Phaser.Scene {
           this.tweens.add({ targets: this.racket, angle: "+=5", duration: 90, yoyo: true });
           this.trail.emitParticleAt(this.ball.x, this.ball.y, 8);
           playBounce();
+          vibrateBounce();
         }
       }
       const past = this.ball.x > this.racket.x + 150 && this.ballVel.y > 0 && this.ball.y > this.racket.y + 150;
@@ -533,6 +686,7 @@ export class CaviteScene extends Phaser.Scene {
     this.cameras.main.shake(200, 0.008);
     this.tweens.add({ targets: this.cavGlow, scale: 3, alpha: 0.9, duration: 160, yoyo: true });
     playHomologue(this.mod.signe);
+    vibrateHit();
 
     this.callbacks.onStamp({
       text: this.mod.signe ? "TIR SIGNÉ HOMOLOGUÉ" : "HOMOLOGUÉ",
@@ -550,6 +704,7 @@ export class CaviteScene extends Phaser.Scene {
     this.lives -= 1;
     this.ghost = this.trace.slice();
     playMiss();
+    vibrateMiss();
     this.callbacks.onStamp({
       text: "LA BALLE COULE",
       points:
@@ -786,9 +941,42 @@ export class CaviteScene extends Phaser.Scene {
     c.refresh();
   }
 
+  private drawRays() {
+    const g = this.raysGfx;
+    g.clear();
+    for (const mx of PILLAR_XS) {
+      const dir = mx < W / 2 ? 1 : -1;
+      const sway = Math.sin(this.waveT * 0.35 + mx) * 26;
+      const pulse = 0.05 + 0.035 * (1 + Math.sin(this.waveT * 0.6 + mx * 0.01));
+      g.fillStyle(0xdceeff, pulse);
+      g.fillTriangle(mx - 15, 30, mx + 15, 30, mx + dir * 150 + sway, H * 0.55);
+      g.fillStyle(0xdceeff, pulse * 0.5);
+      g.fillTriangle(mx - 26, 30, mx + 26, 30, mx + dir * 170 + sway, H * 0.55);
+    }
+  }
+
   private drawArena(v: (typeof VENUES)[number]) {
     const g = this.arenaGfx;
     g.clear();
+
+    // Bassin à fond illustré : la photo fournit toute l'ambiance (arène,
+    // surface, rais de lumière), on saute donc le décor procédural et on recale
+    // les caustiques sur la ligne de surface de la photo.
+    const usePhoto = v.decor === "siffleurs" && this.bgImage !== null;
+    this.photoBg = usePhoto;
+    if (usePhoto) {
+      this.bgImage!.setVisible(true);
+      this.bokehLayer.removeAll(true);
+      this.raysGfx.clear();
+      this.waveGfx.clear();
+      this.caustic1.setPosition(0, PHOTO_SURF).setSize(W, H - PHOTO_SURF);
+      this.caustic2.setPosition(0, PHOTO_SURF).setSize(W, H - PHOTO_SURF);
+      return;
+    }
+    if (this.bgImage) this.bgImage.setVisible(false);
+    this.caustic1.setPosition(0, SURF).setSize(W, H - SURF);
+    this.caustic2.setPosition(0, SURF).setSize(W, H - SURF);
+
     g.fillStyle(v.sky, 1);
     g.fillRect(0, 0, W, SURF);
     g.fillStyle(0x060f20, 1);
@@ -809,17 +997,12 @@ export class CaviteScene extends Phaser.Scene {
       this.bokehLayer.add(img);
     }
 
-    for (const mx of [120, 660]) {
+    for (const mx of PILLAR_XS) {
       g.fillStyle(0x040b18, 1);
       g.fillRect(mx - 3, 24, 6, SURF - 24);
       g.fillRoundedRect(mx - 24, 14, 48, 14, 6);
       g.fillStyle(0xffe9ad, 1);
       for (const dx of [-13, 0, 13]) g.fillCircle(mx + dx, 21, 4);
-      const dir = mx < W / 2 ? 1 : -1;
-      g.fillStyle(0xdceeff, 0.04);
-      g.fillTriangle(mx - 26, 30, mx + 26, 30, mx + dir * 170, H * 0.55);
-      g.fillStyle(0xdceeff, 0.08);
-      g.fillTriangle(mx - 15, 30, mx + 15, 30, mx + dir * 150, H * 0.55);
     }
     g.fillGradientStyle(v.top, v.top, v.bot, v.bot, 1);
     g.fillRect(0, SURF, W, H - SURF);
