@@ -209,6 +209,7 @@ export function CaviteGame({ displayName }: { displayName: string }) {
 
         <div
           ref={containerRef}
+          className={hud?.venueBg ? "canvas-lift" : undefined}
           style={{ display: screen === "playing" ? "block" : "none", flex: 1, touchAction: "none", position: "relative", zIndex: 1 }}
         />
 
@@ -388,22 +389,22 @@ function PlayingChrome({ hud, stamp, mode }: { hud: HudState | null; stamp: Stam
           zIndex: 2,
           pointerEvents: "none",
           textAlign: "center",
-          padding: "28px 16px 16px",
-          background: "linear-gradient(0deg, rgba(2,8,16,.92) 45%, rgba(2,8,16,.5) 80%, rgba(2,8,16,0))"
+          padding: "40px 18px 30px",
+          background: "linear-gradient(0deg, rgba(2,8,16,.92) 40%, rgba(2,8,16,.45) 78%, rgba(2,8,16,0))"
         }}
       >
         <div
           style={{
             display: "inline-block",
-            fontSize: 9,
+            fontSize: 10,
             letterSpacing: "0.16em",
             textTransform: "uppercase",
             color: "var(--or)",
             border: "1px solid rgba(228,192,92,.45)",
             background: "rgba(228,192,92,.05)",
             borderRadius: 99,
-            padding: "5px 13px",
-            marginBottom: 10
+            padding: "6px 15px",
+            marginBottom: 14
           }}
         >
           {hud.pill}
@@ -412,8 +413,8 @@ function PlayingChrome({ hud, stamp, mode }: { hud: HudState | null; stamp: Stam
           style={{
             display: "flex",
             justifyContent: "center",
-            gap: 12,
-            fontSize: 9.5,
+            gap: 14,
+            fontSize: 10.5,
             letterSpacing: "0.14em",
             textTransform: "uppercase",
             color: "var(--argent)"

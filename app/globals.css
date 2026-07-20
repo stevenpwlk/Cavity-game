@@ -72,6 +72,18 @@ a {
   background: linear-gradient(180deg, rgba(2, 8, 16, 0.92) 45%, rgba(2, 8, 16, 0.55) 78%, rgba(2, 8, 16, 0));
 }
 
+/* Bassins à photo : le haut du canvas est de l'eau vide (au-dessus de la
+   raquette). On remonte le gameplay en recadrant le canvas vers le haut ; le
+   `getBoundingClientRect` de Phaser suit le transform, donc les coordonnées de
+   visée restent justes. Réservé aux venues photo (les venues procédurales
+   peignent leur arène dans le haut du canvas et ne doivent pas être rognées). */
+.canvas-lift {
+  overflow: hidden;
+}
+.canvas-lift canvas {
+  transform: translateY(-90px);
+}
+
 @media (min-width: 520px) {
   .phone-shell {
     align-items: center;
