@@ -52,6 +52,26 @@ a {
   overflow: hidden;
 }
 
+/* Décor illustré plein écran des bassins à photo : couvre tout le cadre,
+   derrière le canvas transparent (gameplay) et le HUD. */
+.venue-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
+/* HUD posé au-dessus du décor plein écran, avec un dégradé sombre qui garantit
+   la lisibilité du texte sur la partie claire de l'arène. */
+.topPanel {
+  position: relative;
+  z-index: 2;
+  background: linear-gradient(180deg, rgba(2, 8, 16, 0.92) 45%, rgba(2, 8, 16, 0.55) 78%, rgba(2, 8, 16, 0));
+}
+
 @media (min-width: 520px) {
   .phone-shell {
     align-items: center;

@@ -45,10 +45,11 @@ const VENUES = [
 ] as const;
 const ROMAIN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 const PILLAR_XS = [120, 660] as const;
-// Ligne de surface de l'eau dans le fond illustré (≈26 % de la hauteur), qui
-// diffère du SURF procédural (150) — sert à recaler les caustiques sur les
-// bassins à fond photo.
-const PHOTO_SURF = 322;
+// Fond illustré des bassins à photo, servi en statique et affiché en calque DOM
+// plein écran (voir CaviteGame). URL exposée à React via HudState.venueBg.
+const VENUE_BG: Partial<Record<(typeof VENUES)[number]["decor"], string>> = {
+  siffleurs: "/backgrounds/bassin-siffleurs.webp"
+};
 
 const MILESTONES: Record<number, string> = {
   1: "PREMIER TIR — RAQUETTE FIXE",
@@ -76,6 +77,7 @@ export interface HudState {
   venueNom: string;
   courantLevel: number;
   courantDir: 1 | -1;
+  venueBg: string | null;
 }
 
 export interface StampEvent {
@@ -149,6 +151,7 @@ export class CaviteScene extends Phaser.Scene {
   private racketOrigin = { x: 0.5, y: 0.5 };
   private bgImage: Phaser.GameObjects.Image | null = null;
   private photoBg = false;
+  private venueBgUrl: string | null = null;
 
   private trail!: Phaser.GameObjects.Particles.ParticleEmitter;
   private burst!: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -411,7 +414,8 @@ export class CaviteScene extends Phaser.Scene {
       venuePalier: `PALIER ${ROMAIN[Math.floor((d.n - 1) / 5)] ?? "?"}`,
       venueNom: VENUES[d.bassin]!.nom + (d.cycle ? ` · CYCLE ${ROMAIN[d.cycle]}` : ""),
       courantLevel: lvl,
-      courantDir: d.curDir
+      courantDir: d.curDir,
+      venueBg: this.venueBgUrl
     });
   }
 
@@ -962,20 +966,29 @@ export class CaviteScene extends Phaser.Scene {
     // Bassin à fond illustré : la photo fournit toute l'ambiance (arène,
     // surface, rais de lumière), on saute donc le décor procédural et on recale
     // les caustiques sur la ligne de surface de la photo.
-    const usePhoto = v.decor === "siffleurs" && this.bgImage !== null;
-    this.photoBg = usePhoto;
-    if (usePhoto) {
-      this.bgImage!.setVisible(true);
+    // `this.bgImage !== null` sert de garde-fou : l'image n'est utilisée (en
+    // calque DOM) que si Phaser a bien pu la précharger — sinon on retombe sur
+    // le décor procédural.
+    const bgUrl = this.bgImage !== null ? VENUE_BG[v.decor] : undefined;
+    this.photoBg = !!bgUrl;
+    if (bgUrl) {
+      // Le décor plein écran est un calque DOM (voir CaviteGame / HudState.venueBg).
+      // Le canvas Phaser est transparent et ne peint que le gameplay : on masque
+      // le bgImage in-canvas et toutes les couches d'ambiance procédurales, qui
+      // s'arrêteraient au bord letterboxé du canvas et créeraient une couture.
+      this.venueBgUrl = bgUrl;
+      this.bgImage!.setVisible(false);
       this.bokehLayer.removeAll(true);
       this.raysGfx.clear();
       this.waveGfx.clear();
-      this.caustic1.setPosition(0, PHOTO_SURF).setSize(W, H - PHOTO_SURF);
-      this.caustic2.setPosition(0, PHOTO_SURF).setSize(W, H - PHOTO_SURF);
+      this.caustic1.setVisible(false);
+      this.caustic2.setVisible(false);
       return;
     }
+    this.venueBgUrl = null;
     if (this.bgImage) this.bgImage.setVisible(false);
-    this.caustic1.setPosition(0, SURF).setSize(W, H - SURF);
-    this.caustic2.setPosition(0, SURF).setSize(W, H - SURF);
+    this.caustic1.setVisible(true).setPosition(0, SURF).setSize(W, H - SURF);
+    this.caustic2.setVisible(true).setPosition(0, SURF).setSize(W, H - SURF);
 
     g.fillStyle(v.sky, 1);
     g.fillRect(0, 0, W, SURF);

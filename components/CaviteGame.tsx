@@ -96,6 +96,11 @@ export function CaviteGame({ displayName }: { displayName: string }) {
       gameRef.current = new Phaser.Game({
         type: forceCanvas ? Phaser.CANVAS : Phaser.AUTO,
         parent: containerRef.current!,
+        // Canvas transparent : sur les bassins à fond illustré, le décor est un
+        // calque DOM plein écran (venue-bg) et le canvas ne peint que le
+        // gameplay par-dessus. Les bassins procéduraux peignent un fond opaque
+        // dans leur zone, donc restent inchangés.
+        transparent: true,
         backgroundColor: "#050e1e",
         width: 780,
         height: 1240,
@@ -163,6 +168,10 @@ export function CaviteGame({ displayName }: { displayName: string }) {
   return (
     <div className="phone-shell">
       <div className="phone">
+        {screen === "playing" && hud?.venueBg ? (
+          <div className="venue-bg" style={{ backgroundImage: `url(${hud.venueBg})` }} />
+        ) : null}
+
         {screen === "menu" ? (
           <MenuScreen displayName={displayName} onStart={startRun} />
         ) : null}
@@ -200,7 +209,7 @@ export function CaviteGame({ displayName }: { displayName: string }) {
 
         <div
           ref={containerRef}
-          style={{ display: screen === "playing" ? "block" : "none", flex: 1, touchAction: "none" }}
+          style={{ display: screen === "playing" ? "block" : "none", flex: 1, touchAction: "none", position: "relative", zIndex: 1 }}
         />
 
         {screen === "summary" && summary ? (
