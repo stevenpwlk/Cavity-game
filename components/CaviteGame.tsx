@@ -332,17 +332,11 @@ function PlayingChrome({ hud, stamp, mode }: { hud: HudState | null; stamp: Stam
   if (!hud) return null;
   return (
     <>
-      <div className="topPanel" style={{ padding: "14px 16px 6px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+      <div className="topPanel" style={{ padding: "12px 16px 16px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <span style={{ fontSize: 9, letterSpacing: "0.22em", color: "var(--argent-sombre)" }}>
             {mode === "daily" ? "DÉFI DU JOUR" : "F.I.S.T."}
           </span>
-          <div style={{ textAlign: "center" }}>
-            <div className="num" style={{ fontSize: 25, fontWeight: 700, letterSpacing: "0.04em" }}>
-              {hud.score.toLocaleString("fr-FR")}
-            </div>
-            <div style={{ fontSize: 9, letterSpacing: "0.24em", color: "var(--argent-sombre)" }}>POINTS</div>
-          </div>
           <span
             style={{
               fontSize: 11,
@@ -352,13 +346,19 @@ function PlayingChrome({ hud, stamp, mode }: { hud: HudState | null; stamp: Stam
               border: "1px solid rgba(228,192,92,.5)",
               borderRadius: 99,
               padding: "5px 10px",
-              opacity: hud.serie >= 2 ? 1 : 0.35
+              opacity: hud.serie >= 2 ? 1 : 0.4
             }}
           >
             SÉRIE ×{Math.max(hud.serie, 1)}
           </span>
         </div>
-        <div style={{ display: "flex", gap: 8, justifyContent: "center", padding: "7px 0 5px" }}>
+        <div style={{ textAlign: "center", marginTop: 4 }}>
+          <div className="num" style={{ fontSize: 44, fontWeight: 700, letterSpacing: "0.02em", lineHeight: 1 }}>
+            {hud.score.toLocaleString("fr-FR")}
+          </div>
+          <div style={{ fontSize: 9, letterSpacing: "0.24em", color: "var(--argent-sombre)", marginTop: 3 }}>POINTS</div>
+        </div>
+        <div style={{ display: "flex", gap: 9, justifyContent: "center", marginTop: 9 }}>
           {Array.from({ length: 3 }, (_, i) => (
             <i
               key={i}
@@ -374,6 +374,40 @@ function PlayingChrome({ hud, stamp, mode }: { hud: HudState | null; stamp: Stam
             />
           ))}
         </div>
+      </div>
+
+      {/* Dock bas : fiche du tir posée sur l'eau vide, affichage pur (ne bloque
+          jamais le geste de visée grâce à pointerEvents: none). */}
+      <div
+        className="bottomDock"
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 2,
+          pointerEvents: "none",
+          textAlign: "center",
+          padding: "28px 16px 16px",
+          background: "linear-gradient(0deg, rgba(2,8,16,.92) 45%, rgba(2,8,16,.5) 80%, rgba(2,8,16,0))"
+        }}
+      >
+        <div
+          style={{
+            display: "inline-block",
+            fontSize: 9,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            color: "var(--or)",
+            border: "1px solid rgba(228,192,92,.45)",
+            background: "rgba(228,192,92,.05)",
+            borderRadius: 99,
+            padding: "5px 13px",
+            marginBottom: 10
+          }}
+        >
+          {hud.pill}
+        </div>
         <div
           style={{
             display: "flex",
@@ -388,31 +422,14 @@ function PlayingChrome({ hud, stamp, mode }: { hud: HudState | null; stamp: Stam
           <span>
             TIR <b className="num">{hud.tir}</b>
           </span>
-          <span>·</span>
+          <span style={{ color: "var(--argent-sombre)" }}>·</span>
           <span>
             COTE <span style={{ color: "var(--or)" }}>{"★".repeat(hud.stars) + "☆".repeat(5 - hud.stars)}</span>
           </span>
-          <span>·</span>
+          <span style={{ color: "var(--argent-sombre)" }}>·</span>
           <span>
             POTENTIEL <b className="num">{hud.potentiel.toLocaleString("fr-FR")}</b>
           </span>
-        </div>
-        <div
-          style={{
-            alignSelf: "center",
-            margin: "6px auto 0",
-            fontSize: 9,
-            letterSpacing: "0.16em",
-            textTransform: "uppercase",
-            color: "var(--or)",
-            border: "1px solid rgba(228,192,92,.45)",
-            background: "rgba(228,192,92,.05)",
-            borderRadius: 99,
-            padding: "4px 12px",
-            width: "fit-content"
-          }}
-        >
-          {hud.pill}
         </div>
       </div>
 
