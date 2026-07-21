@@ -7,6 +7,20 @@ export interface LeaderboardRow {
   userId: string;
   displayName: string;
   score: number;
+  /** Rang déjà tranché côté DB (classement général). Absent pour le défi du jour, qui garde i+1. */
+  rank?: number;
+  /**
+   * Mouvement depuis la dernière run terminée du joueur (classement général uniquement).
+   * undefined/null = pas de donnée (jamais rejoué depuis la mise en place de la fonctionnalité) → aucune flèche.
+   */
+  rankMovement?: "up" | "down" | "same" | null;
+}
+
+function movementGlyph(movement: LeaderboardRow["rankMovement"]): { symbol: string; color: string } | null {
+  if (movement === "up") return { symbol: "▲", color: "var(--sonar)" };
+  if (movement === "down") return { symbol: "▼", color: "#c8563b" };
+  if (movement === "same") return { symbol: "▬", color: "var(--argent-sombre)" };
+  return null;
 }
 
 export function LeaderboardTabs({
@@ -50,9 +64,10 @@ export function LeaderboardTabs({
           </p>
         ) : (
           rows.map((row, i) => {
-            const rank = i + 1;
+            const rank = row.rank ?? i + 1;
             const isMe = row.userId === currentUserId;
             const rankColor = rank === 1 ? "var(--or)" : rank === 2 ? "var(--argent)" : rank === 3 ? "#c8563b" : "var(--argent-sombre)";
+            const glyph = movementGlyph(row.rankMovement);
             return (
               <div
                 key={row.userId}
@@ -66,8 +81,15 @@ export function LeaderboardTabs({
                   padding: "11px 14px"
                 }}
               >
-                <span className="num" style={{ fontSize: 13, fontWeight: 700, width: 22, textAlign: "center", color: rankColor }}>
-                  {rank}
+                <span style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 22, gap: 1 }}>
+                  <span className="num" style={{ fontSize: 13, fontWeight: 700, textAlign: "center", color: rankColor }}>
+                    {rank}
+                  </span>
+                  {glyph ? (
+                    <span aria-hidden="true" style={{ fontSize: 8, lineHeight: 1, color: glyph.color }}>
+                      {glyph.symbol}
+                    </span>
+                  ) : null}
                 </span>
                 <span style={{ flex: 1, fontSize: 14, letterSpacing: "0.03em" }}>
                   {row.displayName}
