@@ -63,6 +63,13 @@ const BUBBLES = Array.from({ length: 9 }, (_, i) => ({
   delay: (i * 2.6) % 9
 }));
 
+// Banc d'anchois du fond de menu : léger décalage vertical + temporel par
+// individu pour un mouvement de groupe organique plutôt que rigide.
+const ANCHOVIES = Array.from({ length: 4 }, (_, i) => ({
+  top: 44 + ((i * 13) % 18),
+  delay: i * 0.55
+}));
+
 export function CaviteGame({ displayName }: { displayName: string }) {
   const [screen, setScreen] = useState<Screen>("menu");
   const [hud, setHud] = useState<HudState | null>(null);
@@ -296,8 +303,25 @@ function MenuScreen({
 }) {
   return (
     <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", padding: 22, gap: 22, overflow: "hidden" }}>
-      <div className="menu-backdrop">
+      <div className="menu-backdrop" aria-hidden="true">
+        <div className="menu-photo" />
         <div className="menu-caustic" />
+        <div className="menu-paprika" />
+        <svg className="menu-shark" viewBox="-6 -14 150 46" fill="currentColor">
+          <polygon points="0,16 30,4 60,0 82,4 96,-4 100,8 120,10 140,16 120,24 98,27 95,38 82,29 56,33 26,29" />
+          <polygon points="62,6 74,-10 82,6" />
+        </svg>
+        {ANCHOVIES.map((a, i) => (
+          <svg
+            key={i}
+            className="menu-anchovy"
+            style={{ top: `${a.top}%`, animationDelay: `${a.delay}s` }}
+            viewBox="-2 -6 30 12"
+            fill="currentColor"
+          >
+            <polygon points="0,-5 18,-2 26,0 18,2 0,5 6,0" />
+          </svg>
+        ))}
         {BUBBLES.map((b, i) => (
           <span
             key={i}

@@ -174,6 +174,12 @@ a {
   pointer-events: none;
 }
 
+.menu-photo {
+  position: absolute;
+  inset: 0;
+  background: url("/backgrounds/menu-accueil.webp") center / cover no-repeat;
+}
+
 .menu-caustic {
   position: absolute;
   inset: -20%;
@@ -182,6 +188,7 @@ a {
     radial-gradient(circle at 80% 68%, rgba(228, 192, 92, 0.08), transparent 50%),
     radial-gradient(circle at 46% 92%, rgba(79, 163, 216, 0.1), transparent 60%);
   filter: blur(6px);
+  mix-blend-mode: screen;
   animation: causticDrift 22s ease-in-out infinite alternate;
 }
 
@@ -192,6 +199,41 @@ a {
   background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.55), rgba(174, 189, 208, 0.05) 70%);
   border: 1px solid rgba(219, 233, 248, 0.25);
   animation: bubbleRise linear infinite;
+}
+
+/* Requin-marteau : traversée occasionnelle en silhouette (même dessin que la
+   scène de jeu, réinterprété en SVG). Reste hors-champ la majeure partie du
+   cycle — cameo, pas un élément permanent. */
+.menu-shark {
+  position: absolute;
+  top: 56%;
+  left: 0;
+  width: 150px;
+  color: rgba(159, 200, 238, 0.55);
+  filter: blur(1.5px);
+  animation: sharkCross 38s ease-in-out infinite;
+}
+
+/* Banc d'anchois : petit groupe qui traverse par intervalles, en léger
+   décalage les uns des autres pour un mouvement organique. */
+.menu-anchovy {
+  position: absolute;
+  left: 0;
+  width: 24px;
+  color: rgba(219, 233, 248, 0.6);
+  animation: anchovyCross 24s ease-in-out infinite;
+}
+
+/* Nuage de paprika : dérive discrète, clin d'œil à la Fosse Paprikée. */
+.menu-paprika {
+  position: absolute;
+  top: 40%;
+  left: -18%;
+  width: 220px;
+  height: 90px;
+  background: radial-gradient(ellipse at center, rgba(216, 90, 48, 0.5), transparent 70%);
+  filter: blur(10px);
+  animation: paprikaDrift 50s ease-in-out infinite;
 }
 
 @keyframes causticDrift {
@@ -220,9 +262,71 @@ a {
   }
 }
 
+@keyframes sharkCross {
+  0%,
+  78% {
+    transform: translateX(680px);
+    opacity: 0;
+  }
+  83% {
+    opacity: 0.4;
+  }
+  92% {
+    transform: translateX(-180px);
+    opacity: 0.4;
+  }
+  96%,
+  100% {
+    transform: translateX(-180px);
+    opacity: 0;
+  }
+}
+
+@keyframes anchovyCross {
+  0%,
+  85% {
+    transform: translateX(-30px);
+    opacity: 0;
+  }
+  89% {
+    opacity: 0.5;
+  }
+  97% {
+    transform: translateX(360px);
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateX(380px);
+    opacity: 0;
+  }
+}
+
+@keyframes paprikaDrift {
+  0%,
+  70% {
+    transform: translateX(0) scale(1);
+    opacity: 0;
+  }
+  76% {
+    opacity: 0.16;
+  }
+  92% {
+    transform: translateX(420px) scale(1.15);
+    opacity: 0.1;
+  }
+  100% {
+    transform: translateX(460px) scale(1.15);
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .menu-caustic,
-  .menu-bubble {
+  .menu-bubble,
+  .menu-shark,
+  .menu-anchovy,
+  .menu-paprika {
     animation: none;
+    opacity: 0;
   }
 }
