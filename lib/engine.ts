@@ -128,7 +128,7 @@ export function computeShotDiff(n: number, rng: () => number): ShotDiff {
     curPhase,
     turb: n >= 9,
     shark: n >= 8,
-    anchois: n >= 12,
+    anchois: n >= 5,
     rx,
     ry,
     rAngle,

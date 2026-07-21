@@ -64,7 +64,6 @@ const MILESTONES: Record<number, string> = {
   8: "REQUINS-MARTEAUX EN TRANSIT",
   9: "COURANT TURBULENT PENDANT LE VOL",
   11: "PALIER III — DELPHES-SUR-MER",
-  12: "UN BANC D’ANCHOIS MASQUE LA VUE",
   16: "PALIER IV — LE COULOIR DES REQUINS"
 };
 
@@ -1159,8 +1158,13 @@ export class CaviteScene extends Phaser.Scene {
     if (this.textures.exists("spr_shark")) {
       // Centré sur (70,16) avec un gabarit ~150×43 : coïncide avec l'ellipse
       // de collision serveur (offset 70,16, rayons 80×30 — engine.ts:263-264),
-      // qui ne dépend en rien du sprite affiché ici.
-      const img = this.add.image(70, 16, "spr_shark").setDisplaySize(150, 43);
+      // qui ne dépend en rien du sprite affiché ici. L'illustration source
+      // pointe le nez vers la gauche ; sharkPose() ne va toujours que vers la
+      // droite (x croissant) — flip horizontal indispensable pour qu'il nage
+      // dans le sens de son déplacement (sinon on le voit reculer, y compris
+      // en miroir droitier, puisque le flip CSS du canvas inverse position
+      // ET orientation ensemble).
+      const img = this.add.image(70, 16, "spr_shark").setDisplaySize(150, 43).setFlipX(true);
       this.shark.add(img);
       return;
     }
@@ -1203,23 +1207,18 @@ export class CaviteScene extends Phaser.Scene {
 
   private buildAnchois() {
     if (this.textures.exists("spr_anchois")) {
-      // Même dispersion en grappe que le repli procédural ci-dessous, avec un
-      // sprite unitaire répété à taille/rotation/orientation variées pour un
-      // banc naturel plutôt que des clones identiques.
+      // Quelques individus bien séparés et assez grands pour se reconnaître
+      // comme des poissons distincts — pas un amas minuscule façon banc
+      // procédural (l'illustration réaliste n'a d'intérêt que si elle se voit).
       const specs: { x: number; y: number; scale: number; rot: number; flip: boolean }[] = [
-        { x: 13, y: 0, scale: 1, rot: -4, flip: false },
-        { x: 47, y: -18, scale: 0.9, rot: 6, flip: false },
-        { x: 43, y: 22, scale: 1.05, rot: -8, flip: false },
-        { x: 79, y: 4, scale: 0.95, rot: 3, flip: true },
-        { x: 71, y: -30, scale: 0.85, rot: -5, flip: false },
-        { x: 107, y: -12, scale: 1, rot: 5, flip: true },
-        { x: 103, y: 26, scale: 0.9, rot: -3, flip: false },
-        { x: 133, y: 8, scale: 1, rot: 4, flip: true }
+        { x: 0, y: -22, scale: 1, rot: -5, flip: false },
+        { x: 66, y: 18, scale: 0.82, rot: 6, flip: true },
+        { x: 122, y: -10, scale: 1.1, rot: -7, flip: false }
       ];
       for (const sp of specs) {
         const img = this.add
           .image(sp.x, sp.y, "spr_anchois")
-          .setDisplaySize(34 * sp.scale, 9.5 * sp.scale)
+          .setDisplaySize(56 * sp.scale, 15.6 * sp.scale)
           .setRotation((sp.rot * Math.PI) / 180)
           .setFlipX(sp.flip);
         this.anchois.add(img);
