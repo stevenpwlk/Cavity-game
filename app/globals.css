@@ -201,27 +201,45 @@ a {
   animation: bubbleRise linear infinite;
 }
 
-/* Requin-marteau : traversée occasionnelle en silhouette (même dessin que la
-   scène de jeu, réinterprété en SVG). Reste hors-champ la majeure partie du
-   cycle — cameo, pas un élément permanent. */
+/* Requin-marteau : traversée occasionnelle (illustration réaliste détourée en
+   chroma-key). Reste hors-champ la majeure partie du cycle — cameo, pas un
+   élément permanent. */
 .menu-shark {
   position: absolute;
-  top: 56%;
+  top: 55%;
   left: 0;
-  width: 150px;
-  color: rgba(159, 200, 238, 0.55);
-  filter: blur(1.5px);
+  width: 190px;
+  height: auto;
+  filter: blur(1.5px) brightness(0.85);
   animation: sharkCross 38s ease-in-out infinite;
 }
 
-/* Banc d'anchois : petit groupe qui traverse par intervalles, en léger
-   décalage les uns des autres pour un mouvement organique. */
+/* Banc d'anchois : illustration réaliste détourée en chroma-key. */
 .menu-anchovy {
   position: absolute;
+  top: 47%;
   left: 0;
-  width: 24px;
-  color: rgba(219, 233, 248, 0.6);
+  width: 130px;
+  height: auto;
+  filter: blur(0.8px) brightness(0.9);
   animation: anchovyCross 24s ease-in-out infinite;
+}
+
+/* Voiles de lisibilité : le texte du menu (titre, boutons, sélecteur de
+   latéralité) est posé directement sur la photo — sans ça, il devient
+   illisible là où l'image est claire (arène, emblème lumineux). */
+.menu-scrim-top {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 54%;
+  background: linear-gradient(180deg, rgba(2, 8, 16, 0.85) 0%, rgba(2, 8, 16, 0.5) 60%, rgba(2, 8, 16, 0) 100%);
+}
+
+.menu-scrim-bottom {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 24%;
+  background: linear-gradient(0deg, rgba(2, 8, 16, 0.75) 0%, rgba(2, 8, 16, 0) 100%);
 }
 
 /* Nuage de paprika : dérive discrète, clin d'œil à la Fosse Paprikée. */
@@ -269,15 +287,15 @@ a {
     opacity: 0;
   }
   83% {
-    opacity: 0.4;
+    opacity: 0.6;
   }
   92% {
-    transform: translateX(-180px);
-    opacity: 0.4;
+    transform: translateX(-210px);
+    opacity: 0.6;
   }
   96%,
   100% {
-    transform: translateX(-180px);
+    transform: translateX(-210px);
     opacity: 0;
   }
 }
@@ -285,18 +303,18 @@ a {
 @keyframes anchovyCross {
   0%,
   85% {
-    transform: translateX(-30px);
+    transform: translateX(-150px);
     opacity: 0;
   }
   89% {
-    opacity: 0.5;
+    opacity: 0.65;
   }
   97% {
-    transform: translateX(360px);
-    opacity: 0.5;
+    transform: translateX(470px);
+    opacity: 0.65;
   }
   100% {
-    transform: translateX(380px);
+    transform: translateX(490px);
     opacity: 0;
   }
 }
