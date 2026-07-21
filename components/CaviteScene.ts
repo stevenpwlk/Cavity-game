@@ -188,6 +188,13 @@ export class CaviteScene extends Phaser.Scene {
     for (const [decor, url] of Object.entries(VENUE_BG)) {
       this.load.image(`bg_${decor}`, url);
     }
+    // Requin-marteau et anchois : mêmes illustrations réalistes que le fond de
+    // menu (chroma-key détouré, voir CaviteGame). Purement cosmétique : la
+    // collision du requin (engine.ts:sharkPose) et son ellipse de contact
+    // restent identiques quel que soit le sprite affiché ; les anchois n'ont
+    // aucune collision (purement visuels, voir engine.ts).
+    this.load.image("spr_shark", "/backgrounds/menu-shark.webp");
+    this.load.image("spr_anchois", "/backgrounds/anchois-unit.webp");
   }
 
   create() {
@@ -1149,6 +1156,16 @@ export class CaviteScene extends Phaser.Scene {
   }
 
   private buildShark() {
+    if (this.textures.exists("spr_shark")) {
+      // Centré sur (70,16) avec un gabarit ~150×43 : coïncide avec l'ellipse
+      // de collision serveur (offset 70,16, rayons 80×30 — engine.ts:263-264),
+      // qui ne dépend en rien du sprite affiché ici.
+      const img = this.add.image(70, 16, "spr_shark").setDisplaySize(150, 43);
+      this.shark.add(img);
+      return;
+    }
+    // Repli si l'asset n'a pas pu être précargé : silhouette peinte à la main,
+    // même gabarit.
     const s = this.add.graphics();
     s.fillStyle(0x152741, 0.92);
     s.fillPoints(
@@ -1185,6 +1202,32 @@ export class CaviteScene extends Phaser.Scene {
   }
 
   private buildAnchois() {
+    if (this.textures.exists("spr_anchois")) {
+      // Même dispersion en grappe que le repli procédural ci-dessous, avec un
+      // sprite unitaire répété à taille/rotation/orientation variées pour un
+      // banc naturel plutôt que des clones identiques.
+      const specs: { x: number; y: number; scale: number; rot: number; flip: boolean }[] = [
+        { x: 13, y: 0, scale: 1, rot: -4, flip: false },
+        { x: 47, y: -18, scale: 0.9, rot: 6, flip: false },
+        { x: 43, y: 22, scale: 1.05, rot: -8, flip: false },
+        { x: 79, y: 4, scale: 0.95, rot: 3, flip: true },
+        { x: 71, y: -30, scale: 0.85, rot: -5, flip: false },
+        { x: 107, y: -12, scale: 1, rot: 5, flip: true },
+        { x: 103, y: 26, scale: 0.9, rot: -3, flip: false },
+        { x: 133, y: 8, scale: 1, rot: 4, flip: true }
+      ];
+      for (const sp of specs) {
+        const img = this.add
+          .image(sp.x, sp.y, "spr_anchois")
+          .setDisplaySize(34 * sp.scale, 9.5 * sp.scale)
+          .setRotation((sp.rot * Math.PI) / 180)
+          .setFlipX(sp.flip);
+        this.anchois.add(img);
+      }
+      return;
+    }
+    // Repli si l'asset n'a pas pu être précargé : silhouettes plates peintes
+    // à la main.
     const a = this.add.graphics();
     a.fillStyle(0x9fb8c8, 0.8);
     const F = (x: number, y: number) =>
