@@ -1,6 +1,6 @@
 /**
  * Types minimaux, écrits à la main (pas de `supabase gen types` — CLI non
- * installée dans cet environnement). Ne couvre que les tables/vues
+ * installée dans cet environnement). Ne couvre que les tables/vues/fonctions
  * effectivement utilisées par le jeu ; `profiles` et `auth.users`
  * appartiennent au projet Supabase partagé avec les pronos.
  *
@@ -37,6 +37,8 @@ export interface Database {
           status: "started" | "finished";
           created_at: string;
           finished_at: string | null;
+          rank_before: number | null;
+          rank_after: number | null;
         };
         Insert: {
           user_id: string;
@@ -53,20 +55,73 @@ export interface Database {
           best_serie: number;
           status: "started" | "finished";
           finished_at: string;
+          rank_before: number | null;
+          rank_after: number | null;
         }>;
         Relationships: [];
       };
     };
     Views: {
       arcade_best_scores: {
-        Row: { user_id: string; best_score: number; best_tir_atteint: number };
+        Row: {
+          user_id: string;
+          best_score: number;
+          best_tir_atteint: number;
+          best_score_at: string;
+        };
         Relationships: [];
       };
       arcade_daily_scores: {
         Row: { user_id: string; challenge_date: string; best_score: number };
         Relationships: [];
       };
+      /** Classement général avec rang tranché côté DB (départage score desc, best_score_at asc). */
+      arcade_general_ranking: {
+        Row: {
+          user_id: string;
+          best_score: number;
+          best_score_at: string;
+          best_tir_atteint: number;
+          rank: number;
+        };
+        Relationships: [];
+      };
+      /** Rang tel qu'il était à la dernière run terminée de chaque joueur — alimente la flèche de mouvement. */
+      arcade_latest_run_rank: {
+        Row: {
+          user_id: string;
+          rank_before: number | null;
+          rank_after: number | null;
+          last_run_finished_at: string;
+        };
+        Relationships: [];
+      };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      /** Calcule old_rank/new_rank pour la run qui vient de se terminer, persiste rank_before/rank_after. */
+      finalize_arcade_run_ranking: {
+        Args: { p_run_id: string };
+        Returns: {
+          user_id: string;
+          is_new_best: boolean;
+          is_new_entrant: boolean;
+          old_rank: number | null;
+          new_rank: number | null;
+          old_best: number | null;
+          new_best: number | null;
+        }[];
+      };
+      /** Côté Trounis Prono (même base) : annonce un palier dans le Chat + notif push si applicable. */
+      announce_cavity_milestone: {
+        Args: {
+          p_user_id: string;
+          p_is_new_entrant: boolean;
+          p_old_rank: number | null;
+          p_new_rank: number | null;
+          p_dedup_key: string;
+        };
+        Returns: { skipped: boolean; reason?: string; category?: string; message_id?: string };
+      };
+    };
   };
 }

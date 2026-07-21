@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { simulateRun } from "@/lib/engine";
+import { announceCavityMilestone } from "@/lib/cavity-milestone";
 
 const shotSchema = z.object({
   dx: z.number().finite(),
@@ -33,7 +34,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const admin = getSupabaseAdminClient();
   const { data: run, error: fetchError } = await admin
     .from("arcade_runs")
-    .select("id, user_id, seed, status")
+    .select("id, user_id, run_type, seed, status")
     .eq("id", runId)
     .single();
 
@@ -67,6 +68,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (updateError) {
     return NextResponse.json({ error: "update_failed" }, { status: 500 });
+  }
+
+  // Classement general + annonce Cavity Game cote Trounis Prono : uniquement les
+  // runs normales (le defi quotidien n'a pas de classement general), toujours
+  // best-effort via after() — ne doit jamais retarder ni affecter cette reponse.
+  if (run.run_type === "normal") {
+    after(() => announceCavityMilestone(admin, runId, run.user_id));
   }
 
   return NextResponse.json({
