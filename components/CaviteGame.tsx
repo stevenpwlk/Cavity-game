@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { GAUNTLET_SHOT_NUMBERS } from "@/lib/engine";
 import type { HudState, StampEvent } from "./CaviteScene";
 
 type Mode = "normal" | "daily";
-type Screen = "menu" | "loading" | "playing" | "summary" | "error";
+type Screen = "menu" | "loading" | "playing" | "summary" | "error" | "already-played";
 
 interface Summary {
   score: number;
@@ -81,6 +82,7 @@ export function CaviteGame({ displayName }: { displayName: string }) {
   const [hud, setHud] = useState<HudState | null>(null);
   const [stamp, setStamp] = useState<StampEvent | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [dailyAlreadyPlayed, setDailyAlreadyPlayed] = useState<Summary | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("normal");
   const [dispatch, setDispatch] = useState("");
@@ -114,6 +116,19 @@ export function CaviteGame({ displayName }: { displayName: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mode: selectedMode })
       });
+      if (res.status === 409) {
+        const body = (await res.json().catch(() => null)) as {
+          run?: { score: number; hits: number; tirAtteint: number; bestSerie: number };
+        } | null;
+        setDailyAlreadyPlayed({
+          score: body?.run?.score ?? 0,
+          hits: body?.run?.hits ?? 0,
+          tirAtteint: body?.run?.tirAtteint ?? 0,
+          bestSerie: body?.run?.bestSerie ?? 0
+        });
+        setScreen("already-played");
+        return;
+      }
       if (!res.ok) throw new Error("start_failed");
       const data = (await res.json()) as { runId: string; seed: number };
       runIdRef.current = data.runId;
@@ -157,6 +172,7 @@ export function CaviteGame({ displayName }: { displayName: string }) {
       // sûre à appeler avant la fin du boot.
       gameRef.current.scene.add("cavite", scene, true, {
         seed: data.seed,
+        mode: selectedMode,
         flipX: hand === "R",
         callbacks: {
           onHud: (h: HudState) => setHud(h),
@@ -259,7 +275,21 @@ export function CaviteGame({ displayName }: { displayName: string }) {
         />
 
         {screen === "summary" && summary ? (
-          <SummaryScreen summary={summary} onReplay={() => startRun(mode)} onMenu={() => setScreen("menu")} />
+          <SummaryScreen
+            summary={summary}
+            mode={mode}
+            onReplay={mode === "normal" ? () => startRun(mode) : undefined}
+            onMenu={() => setScreen("menu")}
+          />
+        ) : null}
+
+        {screen === "already-played" && dailyAlreadyPlayed ? (
+          <SummaryScreen
+            summary={dailyAlreadyPlayed}
+            mode="daily"
+            title="DÉJÀ HOMOLOGUÉ AUJOURD'HUI"
+            onMenu={() => setScreen("menu")}
+          />
         ) : null}
 
         {crashMsg ? (
@@ -379,7 +409,7 @@ function MenuScreen({
           <button onClick={() => onStart("daily")} style={cardStyle()}>
             <span style={{ fontWeight: 700, letterSpacing: "0.06em", fontSize: 15 }}>DÉFI HOMOLOGUÉ DU JOUR</span>
             <span style={{ fontSize: 11, color: "var(--argent)", lineHeight: 1.5 }}>
-              Bassin identique pour tous, tentatives illimitées.
+              Gauntlet en 5 tirs, identique pour tous — un seul essai homologué par jour.
             </span>
             <span style={destinationChipStyle()}>COMPTE POUR LE CLASSEMENT DU JOUR</span>
           </button>
@@ -497,22 +527,24 @@ function PlayingChrome({ hud, stamp, mode }: { hud: HudState | null; stamp: Stam
           </div>
           <div style={{ fontSize: 9, letterSpacing: "0.24em", color: "var(--argent-sombre)", marginTop: 3 }}>POINTS</div>
         </div>
-        <div style={{ display: "flex", gap: 9, justifyContent: "center", marginTop: 9 }}>
-          {Array.from({ length: 3 }, (_, i) => (
-            <i
-              key={i}
-              style={{
-                width: 9,
-                height: 9,
-                background: i < hud.lives ? "var(--ecume)" : "transparent",
-                border: i < hud.lives ? "none" : "1px solid var(--argent-sombre)",
-                borderRadius: "50% 50% 50% 0",
-                transform: "rotate(-45deg)",
-                display: "inline-block"
-              }}
-            />
-          ))}
-        </div>
+        {mode === "normal" ? (
+          <div style={{ display: "flex", gap: 9, justifyContent: "center", marginTop: 9 }}>
+            {Array.from({ length: 3 }, (_, i) => (
+              <i
+                key={i}
+                style={{
+                  width: 9,
+                  height: 9,
+                  background: i < hud.lives ? "var(--ecume)" : "transparent",
+                  border: i < hud.lives ? "none" : "1px solid var(--argent-sombre)",
+                  borderRadius: "50% 50% 50% 0",
+                  transform: "rotate(-45deg)",
+                  display: "inline-block"
+                }}
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {/* Dock bas : fiche du tir posée sur l'eau vide, affichage pur (ne bloque
@@ -560,6 +592,7 @@ function PlayingChrome({ hud, stamp, mode }: { hud: HudState | null; stamp: Stam
         >
           <span>
             TIR <b className="num">{hud.tir}</b>
+            {mode === "daily" ? <span className="num">/{GAUNTLET_SHOT_NUMBERS.length}</span> : null}
           </span>
           <span style={{ color: "var(--argent-sombre)" }}>·</span>
           <span>
@@ -611,7 +644,20 @@ function PlayingChrome({ hud, stamp, mode }: { hud: HudState | null; stamp: Stam
   );
 }
 
-function SummaryScreen({ summary, onReplay, onMenu }: { summary: Summary; onReplay: () => void; onMenu: () => void }) {
+function SummaryScreen({
+  summary,
+  mode,
+  title,
+  onReplay,
+  onMenu
+}: {
+  summary: Summary;
+  mode: Mode;
+  title?: string;
+  onReplay?: () => void;
+  onMenu: () => void;
+}) {
+  const isDaily = mode === "daily";
   return (
     <div
       style={{
@@ -625,18 +671,28 @@ function SummaryScreen({ summary, onReplay, onMenu }: { summary: Summary; onRepl
         textAlign: "center"
       }}
     >
-      <span style={{ fontSize: 10, letterSpacing: "0.24em", color: "var(--argent-sombre)" }}>PROCÈS-VERBAL PROVISOIRE</span>
-      <h2 style={{ fontSize: 22, letterSpacing: "0.1em" }}>FIN DE SÉANCE</h2>
+      <span style={{ fontSize: 10, letterSpacing: "0.24em", color: "var(--argent-sombre)" }}>
+        PROCÈS-VERBAL {isDaily ? "HOMOLOGUÉ" : "PROVISOIRE"}
+      </span>
+      <h2 style={{ fontSize: 22, letterSpacing: "0.1em" }}>{title ?? (isDaily ? "FIN DU GAUNTLET" : "FIN DE SÉANCE")}</h2>
       <div className="num" style={{ fontSize: 46, fontWeight: 700 }}>
         {summary.score.toLocaleString("fr-FR")}
       </div>
       <p style={{ fontSize: 12, color: "var(--argent)", maxWidth: "30ch", lineHeight: 1.6, borderTop: "1px solid var(--ligne)", paddingTop: 14 }}>
-        Tir atteint : n°{summary.tirAtteint} · {summary.hits} homologué{summary.hits > 1 ? "s" : ""} · meilleure série ×
-        {Math.max(summary.bestSerie, 1)}. Procès-verbal transmis au greffe de la F.I.S.T.
+        {isDaily
+          ? `5 tirs homologués · ${summary.hits} réussi${summary.hits > 1 ? "s" : ""} · meilleure série ×${Math.max(summary.bestSerie, 1)}.`
+          : `Tir atteint : n°${summary.tirAtteint} · ${summary.hits} homologué${summary.hits > 1 ? "s" : ""} · meilleure série ×${Math.max(summary.bestSerie, 1)}.`}{" "}
+        Procès-verbal transmis au greffe de la F.I.S.T.
       </p>
-      <button className="btn" onClick={onReplay}>
-        NOUVELLE SÉANCE
-      </button>
+      {onReplay ? (
+        <button className="btn" onClick={onReplay}>
+          NOUVELLE SÉANCE
+        </button>
+      ) : (
+        <p style={{ fontSize: 11, color: "var(--argent-sombre)", maxWidth: "26ch" }}>
+          Un seul essai homologué par jour — reviens demain pour un nouveau parcours.
+        </p>
+      )}
       <Link href="/classement" className="btn-ghost" style={{ textDecoration: "none", display: "inline-block" }}>
         VOIR LES CLASSEMENTS
       </Link>

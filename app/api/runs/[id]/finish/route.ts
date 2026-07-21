@@ -2,7 +2,7 @@ import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
-import { simulateRun } from "@/lib/engine";
+import { simulateRun, simulateGauntletRun } from "@/lib/engine";
 import { announceCavityMilestone } from "@/lib/cavity-milestone";
 
 const shotSchema = z.object({
@@ -51,7 +51,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // Autorité du score : rejeu déterministe côté serveur, seed émise par le
   // serveur au démarrage — les valeurs envoyées par le client ne sont jamais
   // utilisées telles quelles, seuls les vecteurs de tir bruts le sont.
-  const result = simulateRun(Number(run.seed), parsed.data.shots);
+  const result =
+    run.run_type === "daily"
+      ? simulateGauntletRun(Number(run.seed), parsed.data.shots)
+      : simulateRun(Number(run.seed), parsed.data.shots);
 
   const { error: updateError } = await admin
     .from("arcade_runs")

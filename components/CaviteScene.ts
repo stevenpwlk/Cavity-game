@@ -10,6 +10,7 @@ import {
   currentNow,
   physStep,
   simulateShot,
+  GAUNTLET_SHOT_NUMBERS,
   type ShotDiff,
   type ShotInput,
   type Vec2
@@ -101,6 +102,9 @@ export class CaviteScene extends Phaser.Scene {
   private seed = 0;
   private rng: () => number = () => 0;
   private callbacks!: CaviteCallbacks;
+  // "daily" = Gauntlet homologué : parcours fixe (GAUNTLET_SHOT_NUMBERS), pas
+  // de vies, toujours 5 tirs. "normal" = séance libre, ramp infini à 3 vies.
+  private mode: "normal" | "daily" = "normal";
 
   private tir = 0;
   private score = 0;
@@ -172,11 +176,22 @@ export class CaviteScene extends Phaser.Scene {
     super("cavite");
   }
 
-  init(data: { seed: number; callbacks: CaviteCallbacks; flipX?: boolean }) {
+  init(data: { seed: number; callbacks: CaviteCallbacks; flipX?: boolean; mode?: "normal" | "daily" }) {
     this.seed = data.seed;
     this.rng = mulberry32(this.seed);
     this.callbacks = data.callbacks;
     this.flipX = !!data.flipX;
+    this.mode = data.mode ?? "normal";
+  }
+
+  /** Palier interne (computeShotDiff) pour la position courante du parcours :
+   * séquentiel en séance libre, fixe (GAUNTLET_SHOT_NUMBERS) en Gauntlet. */
+  private currentN(): number {
+    return this.mode === "daily" ? GAUNTLET_SHOT_NUMBERS[this.tir - 1]! : this.tir;
+  }
+
+  private isLastShot(): boolean {
+    return this.mode === "daily" ? this.tir >= GAUNTLET_SHOT_NUMBERS.length : this.lives === 1;
   }
 
   preload() {
@@ -336,7 +351,7 @@ export class CaviteScene extends Phaser.Scene {
 
   private nextShot() {
     this.tir += 1;
-    this.mod = computeShotDiff(this.tir, this.rng);
+    this.mod = computeShotDiff(this.currentN(), this.rng);
     this.shotStartAt = this.time.now / 1000;
 
     if (this.mod.bassin !== this.bassin) {
@@ -446,7 +461,7 @@ export class CaviteScene extends Phaser.Scene {
     // même moteur déterministe que le rejeu serveur), on joue le vol au ralenti
     // pour le suspense — cosmétique uniquement, le score reste calculé par le
     // rejeu réel côté serveur.
-    this.slowMoActive = this.lives === 1 && !simulateShot(this.mod, this.seed, { dx, dy, readySeconds }).hit;
+    this.slowMoActive = this.isLastShot() && !simulateShot(this.mod, this.seed, { dx, dy, readySeconds }).hit;
     this.stateName = "flying";
     this.flightStartedAt = this.time.now;
     this.ballFlyT = 0;
@@ -721,25 +736,33 @@ export class CaviteScene extends Phaser.Scene {
   private onMiss() {
     this.stateName = "pause";
     this.serie = 0;
-    this.lives -= 1;
     this.ghost = this.trace.slice();
     playMiss();
     vibrateMiss();
-    this.callbacks.onStamp({
-      text: "LA BALLE COULE",
-      points:
+
+    let subtext: string;
+    if (this.mode === "daily") {
+      // Pas de vies au Gauntlet : un raté casse la série mais ne termine
+      // jamais le parcours avant ses 5 tirs.
+      const remaining = GAUNTLET_SHOT_NUMBERS.length - this.tir;
+      subtext = remaining > 0 ? `on enchaîne — ${remaining} tir${remaining > 1 ? "s" : ""} restant${remaining > 1 ? "s" : ""}` : "dernier tir du parcours";
+    } else {
+      this.lives -= 1;
+      subtext =
         this.lives > 0
           ? `récupération en apnée — ${this.lives} balle${this.lives > 1 ? "s" : ""} restante${this.lives > 1 ? "s" : ""}`
-          : "stock de balles épuisé",
-      isMiss: true
-    });
+          : "stock de balles épuisé";
+    }
+
+    this.callbacks.onStamp({ text: "LA BALLE COULE", points: subtext, isMiss: true });
     this.tweens.add({ targets: this.ball, alpha: 0, duration: 500 });
     this.emitHud();
     this.time.delayedCall(1100, () => this.advance());
   }
 
   private advance() {
-    if (this.lives <= 0) {
+    const finished = this.mode === "daily" ? this.tir >= GAUNTLET_SHOT_NUMBERS.length : this.lives <= 0;
+    if (finished) {
       this.stateName = "over";
       this.callbacks.onEnd({ score: this.score, hits: this.hits, tirAtteint: this.tir, bestSerie: this.bestSerie });
       return;

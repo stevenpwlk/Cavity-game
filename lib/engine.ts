@@ -310,6 +310,17 @@ export interface RunResult {
   shots: RunShotResult[];
 }
 
+/**
+ * Paliers fixes du Gauntlet homologué (défi du jour) : un aperçu curé de
+ * chaque grande étape de la courbe de difficulté normale (bassin d'accueil,
+ * Fosse Paprikée, requins, anchois/Delphes, Couloir des Requins final) — pas
+ * de progression procédurale infinie, toujours 5 tirs. Piloté par le même
+ * computeShotDiff() que la séance libre ; la reproductibilité vient de la
+ * cohérence de l'ORDRE des appels (ce tableau) entre client et serveur, pas
+ * d'un nombre fixe d'appels rng() par palier (variable selon n).
+ */
+export const GAUNTLET_SHOT_NUMBERS = [1, 6, 8, 12, 16] as const;
+
 const MAX_SHOTS_PER_RUN = 500;
 
 /** Rejoue une séance entière depuis une seed + un journal de tirs. Autorité du score. */
@@ -324,6 +335,41 @@ export function simulateRun(seed: number, shots: ShotInput[]): RunResult {
   const capped = shots.slice(0, MAX_SHOTS_PER_RUN);
   for (let i = 0; i < capped.length; i++) {
     const n = i + 1;
+    const d = computeShotDiff(n, rng);
+    const outcome = simulateShot(d, seed, capped[i]!);
+    let points = 0;
+    if (outcome.hit) {
+      serie += 1;
+      hits += 1;
+      bestSerie = Math.max(bestSerie, serie);
+      points = outcome.basePoints * serie;
+      score += points;
+    } else {
+      serie = 0;
+    }
+    results.push({ ...outcome, n, serieAfter: serie, points });
+  }
+
+  return { score, hits, tirAtteint: capped.length, bestSerie, shots: results };
+}
+
+/**
+ * Rejoue un Gauntlet homologué (défi du jour) : mêmes règles de score que
+ * simulateRun, mais la séquence de paliers est fixe (GAUNTLET_SHOT_NUMBERS)
+ * au lieu de n=i+1 — pas de "vies", toujours 5 tirs quoi qu'il arrive (un
+ * raté rapporte 0 point et casse la série, mais ne termine pas le parcours).
+ */
+export function simulateGauntletRun(seed: number, shots: ShotInput[]): RunResult {
+  const rng = mulberry32(seed);
+  let score = 0;
+  let hits = 0;
+  let serie = 0;
+  let bestSerie = 0;
+  const results: RunShotResult[] = [];
+
+  const capped = shots.slice(0, GAUNTLET_SHOT_NUMBERS.length);
+  for (let i = 0; i < capped.length; i++) {
+    const n = GAUNTLET_SHOT_NUMBERS[i]!;
     const d = computeShotDiff(n, rng);
     const outcome = simulateShot(d, seed, capped[i]!);
     let points = 0;

@@ -31,6 +31,30 @@ export async function POST(request: Request) {
   const seed = isDaily ? dailySeed(challengeDate!) : (crypto.getRandomValues(new Uint32Array(1))[0] ?? 0);
 
   const admin = getSupabaseAdminClient();
+
+  // Gauntlet homologué : un seul essai par jour, définitif (même une tentative
+  // interrompue le consomme — cf arcade_runs_daily_one_per_user_idx). On vérifie
+  // d'abord explicitement pour renvoyer un message utile ; l'index unique reste
+  // le garde-fou en cas de course entre deux requêtes concurrentes.
+  if (isDaily) {
+    const { data: existing } = await admin
+      .from("arcade_runs")
+      .select("score, hits, tir_atteint, best_serie")
+      .eq("user_id", user.id)
+      .eq("run_type", "daily")
+      .eq("challenge_date", challengeDate!)
+      .maybeSingle();
+    if (existing) {
+      return NextResponse.json(
+        {
+          error: "already_attempted_today",
+          run: { score: existing.score, hits: existing.hits, tirAtteint: existing.tir_atteint, bestSerie: existing.best_serie }
+        },
+        { status: 409 }
+      );
+    }
+  }
+
   const { data, error } = await admin
     .from("arcade_runs")
     .insert({
@@ -43,7 +67,15 @@ export async function POST(request: Request) {
     .select("id")
     .single();
 
-  if (error || !data) {
+  if (error) {
+    // 23505 = violation de l'index unique (course avec une autre requête
+    // concurrente sur le même jour) : même verdict que la vérification amont.
+    if (isDaily && error.code === "23505") {
+      return NextResponse.json({ error: "already_attempted_today", run: null }, { status: 409 });
+    }
+    return NextResponse.json({ error: "insert_failed" }, { status: 500 });
+  }
+  if (!data) {
     return NextResponse.json({ error: "insert_failed" }, { status: 500 });
   }
 
