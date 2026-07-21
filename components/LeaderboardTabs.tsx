@@ -32,7 +32,7 @@ export function LeaderboardTabs({
   general: LeaderboardRow[];
   currentUserId: string;
 }) {
-  const [tab, setTab] = useState<"jour" | "general">("jour");
+  const [tab, setTab] = useState<"jour" | "general">("general");
   const rows = tab === "jour" ? daily : general;
 
   return (
@@ -46,14 +46,11 @@ export function LeaderboardTabs({
       </div>
 
       <div style={{ display: "flex", border: "1px solid var(--ligne)", borderRadius: 99, padding: 3, gap: 3 }}>
-        <button
-          onClick={() => setTab("jour")}
-          style={segStyle(tab === "jour")}
-        >
-          DÉFI DU JOUR
-        </button>
         <button onClick={() => setTab("general")} style={segStyle(tab === "general")}>
           GÉNÉRAL
+        </button>
+        <button onClick={() => setTab("jour")} style={segStyle(tab === "jour")}>
+          DÉFI DU JOUR
         </button>
       </div>
 
