@@ -369,22 +369,23 @@ function MenuScreen({
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
-          <button onClick={() => onStart("normal")} style={cardStyle(false)}>
+          <button onClick={() => onStart("normal")} style={cardStyle()}>
             <span style={{ fontWeight: 700, letterSpacing: "0.06em", fontSize: 15 }}>SÉANCE LIBRE</span>
             <span style={{ fontSize: 11, color: "var(--argent)", lineHeight: 1.5 }}>
               Run infini, difficulté croissante — trois balles.
             </span>
+            <span style={destinationChipStyle()}>COMPTE POUR LE CLASSEMENT GÉNÉRAL</span>
           </button>
-          <button onClick={() => onStart("daily")} style={cardStyle(true)}>
-            <span style={{ fontWeight: 700, letterSpacing: "0.06em", fontSize: 15, color: "var(--or)" }}>
-              DÉFI HOMOLOGUÉ DU JOUR
-            </span>
+          <button onClick={() => onStart("daily")} style={cardStyle()}>
+            <span style={{ fontWeight: 700, letterSpacing: "0.06em", fontSize: 15 }}>DÉFI HOMOLOGUÉ DU JOUR</span>
             <span style={{ fontSize: 11, color: "var(--argent)", lineHeight: 1.5 }}>
-              Bassin identique pour tous — tentatives illimitées, meilleur score du jour retenu.
+              Bassin identique pour tous, tentatives illimitées.
             </span>
+            <span style={destinationChipStyle()}>COMPTE POUR LE CLASSEMENT DU JOUR</span>
           </button>
-          <Link href="/classement" style={{ ...cardStyle(false), textDecoration: "none" }}>
+          <Link href="/classement" style={{ ...cardStyle(), textDecoration: "none" }}>
             <span style={{ fontWeight: 700, letterSpacing: "0.06em", fontSize: 15 }}>CLASSEMENTS</span>
+            <span style={{ fontSize: 11, color: "var(--argent)" }}>Général et défi du jour</span>
           </Link>
         </div>
 
@@ -440,19 +441,29 @@ function handSegStyle(active: boolean): React.CSSProperties {
   };
 }
 
-function cardStyle(gold: boolean): React.CSSProperties {
+function cardStyle(): React.CSSProperties {
   return {
     textAlign: "left",
-    border: `1px solid ${gold ? "rgba(228,192,92,.55)" : "var(--ligne)"}`,
+    border: "1px solid var(--ligne)",
     borderRadius: 16,
     padding: "16px 18px",
-    background: gold ? "rgba(228,192,92,.08)" : "rgba(22,52,93,.35)",
+    background: "rgba(22,52,93,.35)",
     display: "flex",
     flexDirection: "column",
     gap: 4,
     color: "inherit",
     font: "inherit",
     cursor: "pointer"
+  };
+}
+
+function destinationChipStyle(): React.CSSProperties {
+  return {
+    fontSize: 9.5,
+    fontWeight: 700,
+    letterSpacing: "0.07em",
+    color: "var(--sonar)",
+    marginTop: 2
   };
 }
 
