@@ -33,17 +33,20 @@ export async function POST(request: Request) {
   const admin = getSupabaseAdminClient();
 
   // Gauntlet homologué : un seul essai par jour, définitif (même une tentative
-  // interrompue le consomme — cf arcade_runs_daily_one_per_user_idx). On vérifie
-  // d'abord explicitement pour renvoyer un message utile ; l'index unique reste
-  // le garde-fou en cas de course entre deux requêtes concurrentes.
+  // interrompue le consomme). Vérifié ici uniquement au niveau applicatif — pas
+  // de contrainte unique en base, des runs 'daily' historiques multiples pour
+  // un même joueur/jour existent déjà (créées sous l'ancien régime "tentatives
+  // illimitées"), donc `.limit(1)` plutôt que `.single()`/`.maybeSingle()` pour
+  // rester robuste face à ces doublons hérités plutôt que de lever une erreur.
   if (isDaily) {
-    const { data: existing } = await admin
+    const { data: existingRows } = await admin
       .from("arcade_runs")
       .select("score, hits, tir_atteint, best_serie")
       .eq("user_id", user.id)
       .eq("run_type", "daily")
       .eq("challenge_date", challengeDate!)
-      .maybeSingle();
+      .limit(1);
+    const existing = existingRows?.[0];
     if (existing) {
       return NextResponse.json(
         {
@@ -67,15 +70,7 @@ export async function POST(request: Request) {
     .select("id")
     .single();
 
-  if (error) {
-    // 23505 = violation de l'index unique (course avec une autre requête
-    // concurrente sur le même jour) : même verdict que la vérification amont.
-    if (isDaily && error.code === "23505") {
-      return NextResponse.json({ error: "already_attempted_today", run: null }, { status: 409 });
-    }
-    return NextResponse.json({ error: "insert_failed" }, { status: 500 });
-  }
-  if (!data) {
+  if (error || !data) {
     return NextResponse.json({ error: "insert_failed" }, { status: 500 });
   }
 
