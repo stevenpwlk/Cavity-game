@@ -201,28 +201,31 @@ a {
   animation: bubbleRise linear infinite;
 }
 
-/* Requin-marteau : traversée occasionnelle (illustration réaliste détourée en
-   chroma-key). Reste hors-champ la majeure partie du cycle — cameo, pas un
-   élément permanent. */
+/* Requin-marteau : illustration réaliste détourée en chroma-key. Plusieurs
+   instances (hauteur/rythme propres à chacune, voir SHARKS) pour des passages
+   fréquents et jamais à la même hauteur — top/duration/delay fournis en ligne. */
 .menu-shark {
   position: absolute;
-  top: 55%;
   left: 0;
   width: 190px;
   height: auto;
   filter: blur(1.5px) brightness(0.85);
-  animation: sharkCross 38s ease-in-out infinite;
+  animation-name: sharkCross;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
 }
 
-/* Banc d'anchois : illustration réaliste détourée en chroma-key. */
+/* Banc d'anchois : illustration réaliste détourée en chroma-key, même logique
+   multi-instances (voir ANCHOVIES). */
 .menu-anchovy {
   position: absolute;
-  top: 47%;
   left: 0;
   width: 130px;
   height: auto;
   filter: blur(0.8px) brightness(0.9);
-  animation: anchovyCross 24s ease-in-out infinite;
+  animation-name: anchovyCross;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
 }
 
 /* Voiles de lisibilité : le texte du menu (titre, boutons, sélecteur de
@@ -282,18 +285,18 @@ a {
 
 @keyframes sharkCross {
   0%,
-  78% {
+  60% {
     transform: translateX(680px);
     opacity: 0;
   }
-  83% {
+  67% {
     opacity: 0.6;
   }
-  92% {
+  88% {
     transform: translateX(-210px);
     opacity: 0.6;
   }
-  96%,
+  95%,
   100% {
     transform: translateX(-210px);
     opacity: 0;
@@ -302,17 +305,18 @@ a {
 
 @keyframes anchovyCross {
   0%,
-  85% {
+  55% {
     transform: translateX(-150px);
     opacity: 0;
   }
-  89% {
+  62% {
     opacity: 0.65;
   }
-  97% {
+  88% {
     transform: translateX(470px);
     opacity: 0.65;
   }
+  95%,
   100% {
     transform: translateX(490px);
     opacity: 0;

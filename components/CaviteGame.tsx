@@ -63,6 +63,19 @@ const BUBBLES = Array.from({ length: 9 }, (_, i) => ({
   delay: (i * 2.6) % 9
 }));
 
+// Plusieurs requins/bancs en parallèle, à des hauteurs et des rythmes propres,
+// pour des passages fréquents et jamais au même endroit.
+const SHARKS = [
+  { top: 36, duration: 23, delay: 0 },
+  { top: 64, duration: 27, delay: 12 }
+];
+
+const ANCHOVIES = [
+  { top: 28, duration: 15, delay: 0 },
+  { top: 50, duration: 17, delay: 5 },
+  { top: 71, duration: 14, delay: 10 }
+];
+
 export function CaviteGame({ displayName }: { displayName: string }) {
   const [screen, setScreen] = useState<Screen>("menu");
   const [hud, setHud] = useState<HudState | null>(null);
@@ -300,10 +313,26 @@ function MenuScreen({
         <div className="menu-photo" />
         <div className="menu-caustic" />
         <div className="menu-paprika" />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="menu-shark" src="/backgrounds/menu-shark.webp" alt="" />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="menu-anchovy" src="/backgrounds/menu-anchois.webp" alt="" />
+        {SHARKS.map((s, i) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={i}
+            className="menu-shark"
+            src="/backgrounds/menu-shark.webp"
+            alt=""
+            style={{ top: `${s.top}%`, animationDuration: `${s.duration}s`, animationDelay: `${s.delay}s` }}
+          />
+        ))}
+        {ANCHOVIES.map((a, i) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={i}
+            className="menu-anchovy"
+            src="/backgrounds/menu-anchois.webp"
+            alt=""
+            style={{ top: `${a.top}%`, animationDuration: `${a.duration}s`, animationDelay: `${a.delay}s` }}
+          />
+        ))}
         {BUBBLES.map((b, i) => (
           <span
             key={i}
