@@ -213,6 +213,11 @@ a {
   animation-name: sharkCross;
   animation-timing-function: ease-in-out;
   animation-iteration-count: infinite;
+  /* Sans "backwards", le navigateur affiche l'élément dans son état par
+     défaut (visible, non translaté) pendant tout le animation-delay, avant
+     de sauter à l'image-clé 0% — d'où un amas de requins/anchois visibles
+     et figés au chargement, le temps que chaque délai s'écoule. */
+  animation-fill-mode: backwards;
 }
 
 /* Banc d'anchois : illustration réaliste détourée en chroma-key, même logique
@@ -226,6 +231,7 @@ a {
   animation-name: anchovyCross;
   animation-timing-function: ease-in-out;
   animation-iteration-count: infinite;
+  animation-fill-mode: backwards;
 }
 
 /* Voiles de lisibilité : le texte du menu (titre, boutons, sélecteur de
