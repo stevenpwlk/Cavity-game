@@ -48,7 +48,10 @@ const PILLAR_XS = [120, 660] as const;
 // Fond illustré des bassins à photo, servi en statique et affiché en calque DOM
 // plein écran (voir CaviteGame). URL exposée à React via HudState.venueBg.
 const VENUE_BG: Partial<Record<(typeof VENUES)[number]["decor"], string>> = {
-  siffleurs: "/backgrounds/bassin-siffleurs.webp"
+  siffleurs: "/backgrounds/bassin-siffleurs.webp",
+  paprikee: "/backgrounds/bassin-fosse.webp",
+  delphes: "/backgrounds/bassin-delphes.webp",
+  requins: "/backgrounds/bassin-requins.webp"
 };
 
 const MILESTONES: Record<number, string> = {
@@ -149,7 +152,6 @@ export class CaviteScene extends Phaser.Scene {
   private flowX = 0;
   private flowSeeds: { y: number; off: number; len: number }[] = [];
   private racketOrigin = { x: 0.5, y: 0.5 };
-  private bgImage: Phaser.GameObjects.Image | null = null;
   private photoBg = false;
   private venueBgUrl: string | null = null;
   // Latéralité : quand true (droitier), le canvas est retourné en miroir via CSS
@@ -179,18 +181,17 @@ export class CaviteScene extends Phaser.Scene {
   }
 
   preload() {
-    // Fond illustré du bassin des Siffleurs (généré via image_gen, servi en
-    // statique). Les autres bassins restent en rendu procédural pour l'instant ;
-    // si le chargement échoue, drawArena retombe automatiquement sur le décor
-    // procédural (garde-fou this.bgImage !== null).
-    this.load.image("bg_siffleurs", "/backgrounds/bassin-siffleurs.webp");
+    // Fonds illustrés des 4 bassins (générés via image_gen, servis en statique,
+    // affichés en calque DOM plein écran — voir CaviteGame). Si un chargement
+    // échoue, drawArena retombe automatiquement sur le décor procédural pour ce
+    // bassin (garde-fou this.textures.exists(...)).
+    for (const [decor, url] of Object.entries(VENUE_BG)) {
+      this.load.image(`bg_${decor}`, url);
+    }
   }
 
   create() {
     this.makeTextures();
-    this.bgImage = this.textures.exists("bg_siffleurs")
-      ? this.add.image(W / 2, H / 2, "bg_siffleurs").setDisplaySize(W, H).setVisible(false)
-      : null;
     this.arenaGfx = this.add.graphics();
     this.bokehLayer = this.add.container();
     this.caustic1 = this.add
@@ -973,20 +974,17 @@ export class CaviteScene extends Phaser.Scene {
     g.clear();
 
     // Bassin à fond illustré : la photo fournit toute l'ambiance (arène,
-    // surface, rais de lumière), on saute donc le décor procédural et on recale
-    // les caustiques sur la ligne de surface de la photo.
-    // `this.bgImage !== null` sert de garde-fou : l'image n'est utilisée (en
-    // calque DOM) que si Phaser a bien pu la précharger — sinon on retombe sur
-    // le décor procédural.
-    const bgUrl = this.bgImage !== null ? VENUE_BG[v.decor] : undefined;
+    // surface, rais de lumière), on saute donc le décor procédural. La garde
+    // `this.textures.exists(...)` vérifie que Phaser a bien pu précharger cette
+    // image précise (par bassin) — sinon repli sur le décor procédural.
+    const bgUrl = this.textures.exists(`bg_${v.decor}`) ? VENUE_BG[v.decor] : undefined;
     this.photoBg = !!bgUrl;
     if (bgUrl) {
       // Le décor plein écran est un calque DOM (voir CaviteGame / HudState.venueBg).
       // Le canvas Phaser est transparent et ne peint que le gameplay : on masque
-      // le bgImage in-canvas et toutes les couches d'ambiance procédurales, qui
-      // s'arrêteraient au bord letterboxé du canvas et créeraient une couture.
+      // toutes les couches d'ambiance procédurales, qui s'arrêteraient au bord
+      // letterboxé du canvas et créeraient une couture.
       this.venueBgUrl = bgUrl;
-      this.bgImage!.setVisible(false);
       this.bokehLayer.removeAll(true);
       this.raysGfx.clear();
       this.waveGfx.clear();
@@ -995,7 +993,6 @@ export class CaviteScene extends Phaser.Scene {
       return;
     }
     this.venueBgUrl = null;
-    if (this.bgImage) this.bgImage.setVisible(false);
     this.caustic1.setVisible(true).setPosition(0, SURF).setSize(W, H - SURF);
     this.caustic2.setVisible(true).setPosition(0, SURF).setSize(W, H - SURF);
 
