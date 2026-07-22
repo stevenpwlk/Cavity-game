@@ -27,7 +27,14 @@ export const ENGINE = {
   SPEED_MAX: 1500,
   BALL_R: 22,
   CAV_BASE: 38,
-  MIN_DRAG: 24
+  MIN_DRAG: 24,
+  // Rayons de l'ellipse du cadre de la raquette (anneau + cordage dessinés
+  // dans CaviteScene.buildRacket : stroke ellipse(RX, RY, 82, 96, lineWidth
+  // 11), centrée exactement sur le pivot de pose) — utilisés pour le test de
+  // rebond sur le cadre, avec une petite marge pour la moitié de l'épaisseur
+  // du trait.
+  FRAME_RX: 88,
+  FRAME_RY: 102
 } as const;
 
 export type Vec2 = { x: number; y: number };
@@ -299,14 +306,28 @@ export function simulateShot(d: ShotDiff, seed: number, input: ShotInput): ShotO
       return { hit: true, basePoints, centered, signe: d.signe, sharkHit, bounced, minDist, flightSeconds: flyT };
     }
 
-    // Rebond sur le cadre de la raquette : zone large (±100 px autour de la
-    // raquette), beaucoup moins sensible au tunnelling que la petite cavité —
-    // reste sur le test de croisement existant.
+    // Rebond sur le cadre de la raquette : zone large, beaucoup moins
+    // sensible au tunnelling que la petite cavité — reste sur le test de
+    // croisement pour trouver le point, mais teste ensuite ce point contre
+    // la VRAIE silhouette elliptique du cadre (dans le repère tourné de la
+    // raquette), pas une bande verticale plate non tournée. L'ancienne bande
+    // ±100px ignorait la rotation de la raquette (jusqu'à ~25°) : sur un tir
+    // avec une raquette inclinée, elle pouvait déclencher un rebond dans une
+    // zone qui, une fois la rotation prise en compte, tombe visiblement en
+    // dehors de l'anneau dessiné (repoussé "sans raison").
     const crossedFrame = (prev.x - cav.x) * (p.x - cav.x) <= 0 && prev.x !== p.x;
     if (crossedFrame && !bounced) {
       const k = (cav.x - prev.x) / (p.x - prev.x);
       const yc = prev.y + k * (p.y - prev.y);
-      if (Math.abs(yc - pose.y) < 100) {
+      const rad = (pose.angleDeg * Math.PI) / 180;
+      const cosA = Math.cos(rad);
+      const sinA = Math.sin(rad);
+      const relX = cav.x - pose.x;
+      const relY = yc - pose.y;
+      const localX = relX * cosA + relY * sinA;
+      const localY = -relX * sinA + relY * cosA;
+      const onFrame = (localX / ENGINE.FRAME_RX) ** 2 + (localY / ENGINE.FRAME_RY) ** 2 <= 1;
+      if (onFrame) {
         bounced = true;
         p.x = cav.x - Math.sign(v.x) * 24;
         p.y = yc;

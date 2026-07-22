@@ -701,12 +701,23 @@ export class CaviteScene extends Phaser.Scene {
           return;
         }
 
-        // Rebond sur le cadre : zone large, reste sur le test de croisement.
+        // Rebond sur le cadre : zone large, reste sur le test de croisement
+        // pour trouver le point, mais teste ce point contre la vraie
+        // silhouette elliptique tournée du cadre (identique à
+        // lib/engine.ts) plutôt qu'une bande verticale plate non tournée.
         const crossedFrame = (prev.x - stepCav.x) * (p.x - stepCav.x) <= 0 && prev.x !== p.x;
         if (crossedFrame && !this.ballBounced) {
           const k = (stepCav.x - prev.x) / (p.x - prev.x);
           const yc = prev.y + k * (p.y - prev.y);
-          if (Math.abs(yc - stepPose.y) < 100) {
+          const rad = (stepPose.angleDeg * Math.PI) / 180;
+          const cosA = Math.cos(rad);
+          const sinA = Math.sin(rad);
+          const relX = stepCav.x - stepPose.x;
+          const relY = yc - stepPose.y;
+          const localX = relX * cosA + relY * sinA;
+          const localY = -relX * sinA + relY * cosA;
+          const onFrame = (localX / ENGINE.FRAME_RX) ** 2 + (localY / ENGINE.FRAME_RY) ** 2 <= 1;
+          if (onFrame) {
             this.ballBounced = true;
             const bx = stepCav.x - Math.sign(this.ballVel.x) * 24;
             this.ball.setPosition(bx, yc);
