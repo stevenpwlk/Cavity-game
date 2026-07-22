@@ -521,6 +521,29 @@ function PlayingChrome({ hud, stamp, mode }: { hud: HudState | null; stamp: Stam
             SÉRIE ×{Math.max(hud.serie, 1)}
           </span>
         </div>
+        {hud.courantLevel > 0 ? (
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 6 }}>
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.1em",
+                color: "var(--sonar)",
+                border: "1px solid rgba(79,163,216,.45)",
+                borderRadius: 99,
+                padding: "4px 11px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6
+              }}
+            >
+              COURANT
+              <span aria-hidden="true" style={{ letterSpacing: "-0.05em" }}>
+                {(hud.courantDir === 1 ? "→" : "←").repeat(hud.courantLevel)}
+              </span>
+            </span>
+          </div>
+        ) : null}
         <div style={{ textAlign: "center", marginTop: 4 }}>
           <div className="num" style={{ fontSize: 44, fontWeight: 700, letterSpacing: "0.02em", lineHeight: 1 }}>
             {hud.score.toLocaleString("fr-FR")}
