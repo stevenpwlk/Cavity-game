@@ -231,7 +231,10 @@ export interface ShotOutcome {
   flightSeconds: number;
 }
 
-const FLIGHT_STEP = 1 / 60;
+// Exporte : le client (CaviteScene) doit intégrer le vol de balle sur exactement
+// le même pas que ce rejeu serveur, sous peine de résoudre différemment un tir
+// limite (voir CaviteScene.safeUpdate).
+export const FLIGHT_STEP = 1 / 60;
 const FLIGHT_MAX_SECONDS = 4;
 
 export function simulateShot(d: ShotDiff, seed: number, input: ShotInput): ShotOutcome {

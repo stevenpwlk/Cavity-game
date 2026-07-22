@@ -10,6 +10,7 @@ import {
   currentNow,
   physStep,
   simulateShot,
+  FLIGHT_STEP,
   GAUNTLET_SHOT_NUMBERS,
   type ShotDiff,
   type ShotInput,
@@ -124,6 +125,13 @@ export class CaviteScene extends Phaser.Scene {
   private ballGlow!: Phaser.GameObjects.Image;
   private ballVel: Vec2 = { x: 0, y: 0 };
   private ballFlyT = 0;
+  // Accumulateur à pas fixe (voir launch()/safeUpdate) : le rendu reste à la
+  // fréquence réelle de l'écran, mais la trajectoire/collision de la balle en
+  // vol avancent par pas fixes de FLIGHT_STEP, identiques au rejeu serveur
+  // (lib/engine.ts). flightT0 fige le readySeconds de ce tir, pour reproduire
+  // exactement le t = t0 + flyT utilisé par simulateShot.
+  private flightAccum = 0;
+  private flightT0 = 0;
   private ballHome: Vec2 = { x: 0, y: 0 };
   private ballBounced = false;
   private ballSharkHit = false;
@@ -465,6 +473,8 @@ export class CaviteScene extends Phaser.Scene {
     this.stateName = "flying";
     this.flightStartedAt = this.time.now;
     this.ballFlyT = 0;
+    this.flightAccum = 0;
+    this.flightT0 = Math.max(0, readySeconds);
     this.ballBounced = false;
     this.ballSharkHit = false;
     this.trace = [];
@@ -623,58 +633,80 @@ export class CaviteScene extends Phaser.Scene {
         this.onMiss();
         return;
       }
-      const flightDt = this.slowMoActive ? dt * 0.32 : dt;
-      const prev: Vec2 = { x: this.ball.x, y: this.ball.y };
-      const p: Vec2 = { x: this.ball.x, y: this.ball.y };
-      physStep(p, this.ballVel, flightDt, currentNow(d, this.ballFlyT));
-      this.ball.setPosition(p.x, p.y);
-      this.ballFlyT += flightDt;
-      this.ball.rotation += flightDt * 2.4;
-      if (Math.random() < (this.slowMoActive ? 0.14 : 0.35)) this.trail.emitParticleAt(this.ball.x - 6, this.ball.y, 1);
-      if (Math.random() < 0.5) this.trace.push({ x: this.ball.x, y: this.ball.y });
 
-      if (d.shark && !this.ballSharkHit) {
-        const s = sharkPose(d, this.seed, tShot);
-        if (s) {
-          const sx = (p.x - s.x - 70) / 80;
-          const sy = (p.y - s.y - 16) / 30;
-          if (sx * sx + sy * sy < 1) {
-            this.ballSharkHit = true;
-            this.ballVel.y = Math.abs(this.ballVel.y) * 0.3 + 170;
-            this.ballVel.x *= 0.3;
-            this.cameras.main.shake(110, 0.005);
-            this.trail.emitParticleAt(this.ball.x, this.ball.y, 10);
-            playSharkHit();
-            vibrateSharkHit();
+      // Pas de temps FIXE, identique à FLIGHT_STEP côté serveur (lib/engine.ts,
+      // simulateShot) : le rendu reste cadencé à la fréquence réelle de l'écran
+      // (dt variable), mais la trajectoire de la balle et la détection de
+      // collision avancent par pas fixes accumulés — sinon un pas variable
+      // (jank, appareil plus lent) peut résoudre un tir limite différemment du
+      // rejeu serveur, et faire baisser le score homologué en fin de partie
+      // par rapport à ce qui a été vu à l'écran pendant le tir.
+      this.flightAccum += this.slowMoActive ? dt * 0.32 : dt;
+
+      while (this.flightAccum >= FLIGHT_STEP) {
+        this.flightAccum -= FLIGHT_STEP;
+
+        const prev: Vec2 = { x: this.ball.x, y: this.ball.y };
+        const p: Vec2 = { x: this.ball.x, y: this.ball.y };
+        physStep(p, this.ballVel, FLIGHT_STEP, currentNow(d, this.ballFlyT));
+        this.ballFlyT += FLIGHT_STEP;
+        const t = this.flightT0 + this.ballFlyT;
+
+        this.ball.setPosition(p.x, p.y);
+        this.ball.rotation += FLIGHT_STEP * 2.4;
+        if (Math.random() < (this.slowMoActive ? 0.14 : 0.35)) this.trail.emitParticleAt(this.ball.x - 6, this.ball.y, 1);
+        if (Math.random() < 0.5) this.trace.push({ x: this.ball.x, y: this.ball.y });
+
+        if (d.shark && !this.ballSharkHit) {
+          const s = sharkPose(d, this.seed, t);
+          if (s) {
+            const sx = (p.x - s.x - 70) / 80;
+            const sy = (p.y - s.y - 16) / 30;
+            if (sx * sx + sy * sy < 1) {
+              this.ballSharkHit = true;
+              this.ballVel.y = Math.abs(this.ballVel.y) * 0.3 + 170;
+              this.ballVel.x *= 0.3;
+              this.cameras.main.shake(110, 0.005);
+              this.trail.emitParticleAt(this.ball.x, this.ball.y, 10);
+              playSharkHit();
+              vibrateSharkHit();
+            }
           }
         }
-      }
 
-      const crossed = (prev.x - cav.x) * (p.x - cav.x) <= 0 && prev.x !== p.x;
-      if (crossed) {
-        const k = (cav.x - prev.x) / (p.x - prev.x);
-        const yc = prev.y + k * (p.y - prev.y);
-        const dist = Math.abs(yc - cav.y);
-        if (dist < cav.r - 2) {
-          this.onSuccess(dist, cav.r);
+        // pose/cavité recalculées sur l'horloge de simulation (t = t0 + flyT),
+        // pas sur le temps réel écoulé (tShot) : c'est cette grille de temps,
+        // identique à celle du serveur, qui élimine la divergence.
+        const stepPose = racketPose(d, t);
+        const stepCav = cavityWorld(d, stepPose);
+
+        const crossed = (prev.x - stepCav.x) * (p.x - stepCav.x) <= 0 && prev.x !== p.x;
+        if (crossed) {
+          const k = (stepCav.x - prev.x) / (p.x - prev.x);
+          const yc = prev.y + k * (p.y - prev.y);
+          const dist = Math.abs(yc - stepCav.y);
+          if (dist < stepCav.r - 2) {
+            this.onSuccess(dist, stepCav.r);
+            return;
+          }
+          if (!this.ballBounced && Math.abs(yc - stepPose.y) < 100) {
+            this.ballBounced = true;
+            const bx = stepCav.x - Math.sign(this.ballVel.x) * 24;
+            this.ball.setPosition(bx, yc);
+            this.ballVel.x = -this.ballVel.x * 0.4;
+            this.ballVel.y *= 0.55;
+            this.cameras.main.shake(90, 0.004);
+            this.tweens.add({ targets: this.racket, angle: "+=5", duration: 90, yoyo: true });
+            this.trail.emitParticleAt(this.ball.x, this.ball.y, 8);
+            playBounce();
+            vibrateBounce();
+          }
+        }
+        const past = this.ball.x > stepPose.x + 150 && this.ballVel.y > 0 && this.ball.y > stepPose.y + 150;
+        if (this.ball.y > H - 60 || this.ball.x > W + 80 || this.ball.x < -80 || this.ballFlyT > 3.5 || past) {
+          this.onMiss();
           return;
         }
-        if (!this.ballBounced && Math.abs(yc - pose.y) < 100) {
-          this.ballBounced = true;
-          const bx = cav.x - Math.sign(this.ballVel.x) * 24;
-          this.ball.setPosition(bx, yc);
-          this.ballVel.x = -this.ballVel.x * 0.4;
-          this.ballVel.y *= 0.55;
-          this.cameras.main.shake(90, 0.004);
-          this.tweens.add({ targets: this.racket, angle: "+=5", duration: 90, yoyo: true });
-          this.trail.emitParticleAt(this.ball.x, this.ball.y, 8);
-          playBounce();
-          vibrateBounce();
-        }
-      }
-      const past = this.ball.x > this.racket.x + 150 && this.ballVel.y > 0 && this.ball.y > this.racket.y + 150;
-      if (this.ball.y > H - 60 || this.ball.x > W + 80 || this.ball.x < -80 || this.ballFlyT > 3.5 || past) {
-        this.onMiss();
       }
     }
   }
