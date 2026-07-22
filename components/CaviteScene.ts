@@ -62,12 +62,22 @@ const MILESTONES: Record<number, string> = {
   3: "LA RAQUETTE DÉRIVE",
   4: "LA CAVITÉ SE RESSERRE",
   6: "PALIER II — LA FOSSE PAPRIKÉE",
-  7: "LE COURANT PEUT CHANGER DE SENS",
+  7: "COURANT FORT — ET PEUT CHANGER DE SENS",
   8: "REQUINS-MARTEAUX EN TRANSIT",
   9: "COURANT TURBULENT PENDANT LE VOL",
   11: "PALIER III — DELPHES-SUR-MER",
   16: "PALIER IV — LE COULOIR DES REQUINS"
 };
+
+// Filets de courant (safeUpdate) : plus visibles et plus denses à mesure que
+// le courant monte en palier (index = courantLevel(), 0 = pas de courant donc
+// jamais lu), pour rester lisible indépendamment de la couleur du bassin.
+const FLOW_STYLE: { width: number; color: number; alpha: number; lenMul: number }[] = [
+  { width: 2, color: 0x9fc8ee, alpha: 0.14, lenMul: 1 },
+  { width: 2, color: 0x9fc8ee, alpha: 0.2, lenMul: 1.1 },
+  { width: 2.6, color: 0xbfe0ff, alpha: 0.32, lenMul: 1.3 },
+  { width: 3.2, color: 0xe9f6ff, alpha: 0.48, lenMul: 1.6 }
+];
 
 export interface HudState {
   score: number;
@@ -427,6 +437,12 @@ export class CaviteScene extends Phaser.Scene {
     return this.time.now / 1000 - this.shotStartAt;
   }
 
+  /** Niveau de courant 0-3, utilisé par le HUD, les filets de courant et le
+   * rappel de palier — un seul endroit pour ce seuillage. */
+  private courantLevel(d: ShotDiff): number {
+    return d.curBase === 0 ? 0 : d.curBase < 80 ? 1 : d.curBase < 140 ? 2 : 3;
+  }
+
   private pillText(): string {
     const d = this.mod;
     if (d.signe) return "TIR SIGNÉ — HOMOLOGATION ×3";
@@ -441,7 +457,7 @@ export class CaviteScene extends Phaser.Scene {
     const d = this.mod;
     const readyT = this.stateName === "ready" || this.stateName === "aiming" ? this.tSinceShotStart() : 0;
     const pf = potFactor(readyT);
-    const lvl = d.curBase === 0 ? 0 : d.curBase < 80 ? 1 : d.curBase < 140 ? 2 : 3;
+    const lvl = this.courantLevel(d);
     this.callbacks.onHud({
       score: this.score,
       serie: this.serie,
@@ -527,12 +543,18 @@ export class CaviteScene extends Phaser.Scene {
     this.flowX += curNow * dt * 0.9;
     this.flowGfx.clear();
     if (d.curBase) {
-      this.flowGfx.lineStyle(2, 0x9fc8ee, 0.14);
+      // Filets codés par intensité (retour Steven : le courant se confondait
+      // visuellement avec la couleur du bassin, notamment la Fosse Paprikée —
+      // rendre le courant lisible indépendamment du décor). Plus le palier
+      // est élevé, plus les filets sont opaques, épais et longs.
+      const lvl = this.courantLevel(d);
+      const style = FLOW_STYLE[lvl] ?? FLOW_STYLE[1]!;
+      this.flowGfx.lineStyle(style.width, style.color, style.alpha);
       for (const s of this.flowSeeds) {
         const x = (((s.off + this.flowX) % (W + 120)) + (W + 120)) % (W + 120) - 60;
         this.flowGfx.beginPath();
         this.flowGfx.moveTo(x, s.y);
-        this.flowGfx.lineTo(x + s.len * Math.sign(curNow || 1), s.y);
+        this.flowGfx.lineTo(x + s.len * style.lenMul * Math.sign(curNow || 1), s.y);
         this.flowGfx.strokePath();
       }
     }
@@ -759,8 +781,16 @@ export class CaviteScene extends Phaser.Scene {
     g.fillStyle(0xeef5ff, 0.95);
     const steps = 60;
     const shown = Math.floor(steps * 0.26);
+    const previewStep = 1 / 45;
+    let previewT = 0;
     for (let i = 0; i < steps; i++) {
-      physStep(p, v, 1 / 45, 0);
+      // Le courant réel infléchit désormais l'aperçu (avant : 0 codé en dur,
+      // donc une trajectoire toujours "en eau calme"). L'aperçu reste tronqué
+      // à 26 % du vol — sur un tir de ~4s, ça ne montre que le tout début de
+      // la dérive : le joueur voit qu'"il y a du courant et de quel côté",
+      // mais doit toujours extrapoler/compenser lui-même le reste du vol.
+      physStep(p, v, previewStep, currentNow(this.mod, previewT));
+      previewT += previewStep;
       if (i % 4 === 0 && i < shown) g.fillCircle(p.x, p.y, 4.5 - (i / steps) * 2.5);
     }
   }
