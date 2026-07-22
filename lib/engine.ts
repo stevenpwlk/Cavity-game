@@ -274,19 +274,39 @@ export function simulateShot(d: ShotDiff, seed: number, input: ShotInput): ShotO
 
     const pose = racketPose(d, t);
     const cav = cavityWorld(d, pose);
-    const crossed = (prev.x - cav.x) * (p.x - cav.x) <= 0 && prev.x !== p.x;
-    if (crossed) {
+
+    // Distance point-segment (collision continue) plutôt que "croisement de x
+    // du pas puis interpolation linéaire de y au point de croisement" : sur un
+    // tir rapide, le segment parcouru en un seul pas peut être plus large que
+    // la cavité elle-même, et son point de croisement exact avec x=cav.x n'est
+    // pas forcément le point du segment le plus proche du centre — un tir qui
+    // "survole" la cavité pouvait alors ne jamais être détecté comme touché
+    // (tunnelling). Vérifié contre des tirs réels : élimine l'essentiel des
+    // tunnellings à haute vitesse (vs le test par croisement précédent).
+    const segDx = p.x - prev.x;
+    const segDy = p.y - prev.y;
+    const segLenSq = segDx * segDx + segDy * segDy;
+    const segT =
+      segLenSq > 1e-9 ? Math.max(0, Math.min(1, ((cav.x - prev.x) * segDx + (cav.y - prev.y) * segDy) / segLenSq)) : 0;
+    const closestX = prev.x + segT * segDx;
+    const closestY = prev.y + segT * segDy;
+    const dist = Math.hypot(closestX - cav.x, closestY - cav.y);
+    minDist = Math.min(minDist, dist);
+    if (dist < cav.r - 2) {
+      const centered = dist < cav.r * 0.35;
+      const base = d.potBase + Math.round(300 * (1 - dist / cav.r));
+      const basePoints = Math.round(base * potF * (centered ? 1.2 : 1)) * (d.signe ? 3 : 1);
+      return { hit: true, basePoints, centered, signe: d.signe, sharkHit, bounced, minDist, flightSeconds: flyT };
+    }
+
+    // Rebond sur le cadre de la raquette : zone large (±100 px autour de la
+    // raquette), beaucoup moins sensible au tunnelling que la petite cavité —
+    // reste sur le test de croisement existant.
+    const crossedFrame = (prev.x - cav.x) * (p.x - cav.x) <= 0 && prev.x !== p.x;
+    if (crossedFrame && !bounced) {
       const k = (cav.x - prev.x) / (p.x - prev.x);
       const yc = prev.y + k * (p.y - prev.y);
-      const dist = Math.abs(yc - cav.y);
-      minDist = Math.min(minDist, dist);
-      if (dist < cav.r - 2) {
-        const centered = dist < cav.r * 0.35;
-        const base = d.potBase + Math.round(300 * (1 - dist / cav.r));
-        const basePoints = Math.round(base * potF * (centered ? 1.2 : 1)) * (d.signe ? 3 : 1);
-        return { hit: true, basePoints, centered, signe: d.signe, sharkHit, bounced, minDist, flightSeconds: flyT };
-      }
-      if (!bounced && Math.abs(yc - pose.y) < 100) {
+      if (Math.abs(yc - pose.y) < 100) {
         bounced = true;
         p.x = cav.x - Math.sign(v.x) * 24;
         p.y = yc;
