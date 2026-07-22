@@ -680,16 +680,33 @@ export class CaviteScene extends Phaser.Scene {
         const stepPose = racketPose(d, t);
         const stepCav = cavityWorld(d, stepPose);
 
-        const crossed = (prev.x - stepCav.x) * (p.x - stepCav.x) <= 0 && prev.x !== p.x;
-        if (crossed) {
+        // Distance point-segment (collision continue), identique à
+        // lib/engine.ts:simulateShot : sur un tir rapide, le point de
+        // croisement exact avec x=stepCav.x n'est pas forcément le point du
+        // segment le plus proche du centre de la cavité — un tir qui
+        // "survole" la cavité sans jamais être détecté (tunnelling à haute
+        // vitesse). Doit rester bit-à-bit identique au serveur.
+        const segDx = p.x - prev.x;
+        const segDy = p.y - prev.y;
+        const segLenSq = segDx * segDx + segDy * segDy;
+        const segT =
+          segLenSq > 1e-9
+            ? Math.max(0, Math.min(1, ((stepCav.x - prev.x) * segDx + (stepCav.y - prev.y) * segDy) / segLenSq))
+            : 0;
+        const closestX = prev.x + segT * segDx;
+        const closestY = prev.y + segT * segDy;
+        const dist = Math.hypot(closestX - stepCav.x, closestY - stepCav.y);
+        if (dist < stepCav.r - 2) {
+          this.onSuccess(dist, stepCav.r);
+          return;
+        }
+
+        // Rebond sur le cadre : zone large, reste sur le test de croisement.
+        const crossedFrame = (prev.x - stepCav.x) * (p.x - stepCav.x) <= 0 && prev.x !== p.x;
+        if (crossedFrame && !this.ballBounced) {
           const k = (stepCav.x - prev.x) / (p.x - prev.x);
           const yc = prev.y + k * (p.y - prev.y);
-          const dist = Math.abs(yc - stepCav.y);
-          if (dist < stepCav.r - 2) {
-            this.onSuccess(dist, stepCav.r);
-            return;
-          }
-          if (!this.ballBounced && Math.abs(yc - stepPose.y) < 100) {
+          if (Math.abs(yc - stepPose.y) < 100) {
             this.ballBounced = true;
             const bx = stepCav.x - Math.sign(this.ballVel.x) * 24;
             this.ball.setPosition(bx, yc);
